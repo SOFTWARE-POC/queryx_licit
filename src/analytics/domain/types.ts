@@ -1,138 +1,126 @@
 /**
- * Tipos da camada semântica e do engine de consulta.
+ * Tipos da camada semântica e do compilador de consultas.
  *
- * O cliente descreve O QUE quer (QuerySpec) usando apelidos (dataset, measures,
- * dimensions). O catálogo (Dataset) diz o que cada apelido significa. O compilador
- * transforma isso num aggregation pipeline do Mongo, injetando o tenant, que NUNCA
- * vem do cliente.
+ * O cliente descreve O QUE quer (QuerySpec) usando apelidos (dataset, medidas,
+ * dimensões). O catálogo (Dataset) diz o que cada apelido significa em SQL. O
+ * compilador junta as duas coisas num SELECT parametrizado, sempre com a
+ * empresa da sessão, que NUNCA vem do cliente.
  *
- * Domínio puro: nada de Nest, Express ou driver do Mongo aqui.
+ * Domínio puro: nada de Nest, Express ou driver do Postgres aqui.
  */
 
-/** Expressão de aggregation do Mongo (objeto genérico). */
-export type MongoExpr = Record<string, unknown>;
-
-/** Estágio de pipeline do Mongo. */
-export type PipelineStage = Record<string, unknown>;
-
 // ---------------------------------------------------------------------------
-// Catálogo: dimensões e medidas
+// Catálogo
 // ---------------------------------------------------------------------------
 
-export type DimensionType = "string" | "number" | "time" | "id";
+/** `time` = instante (timestamptz); `date` = dia sem hora (date). */
+export type DimensionType = "string" | "number" | "boolean" | "time" | "date";
 
-/** Formatos que o frontend sabe renderizar. */
+/** Formatos que o front sabe mostrar. */
 export type ValueFormat =
   | "integer"
   | "number"
+  | "decimal"
   | "percent"
   | "currency"
   | "hours"
+  | "minutes"
+  | "days"
+  | "meters"
   | "date"
   | "datetime"
   | "time";
 
-export interface Lookup {
-  from: string;
-  localField: string;
-  foreignField: string;
-  /** Nome do campo temporário do join. Use prefixo `__` pra não sobrescrever
-   * o campo original (que outra dimensão pode usar como id). */
-  as: string;
-  /** Campos trazidos do documento relacionado — só eles entram no pipeline.
-   * Evita carregar dados sensíveis (ex.: hash de senha de `users`). */
-  fields: string[];
-  /**
-   * O atributo é 1:1 com a chave local (ex.: nome do usuário pelo id). O grupo é
-   * feito pela CHAVE e o join roda depois do `$group`, uma vez por grupo — em vez
-   * de uma vez por documento. De quebra, dois usuários homônimos não se fundem.
-   * Não use para atributos N:1 (ex.: órgão da licitação), senão o agrupamento
-   * deixa de juntar registros com o mesmo valor.
-   */
-  late?: boolean;
-}
-
 export interface Dimension {
   title: string;
   type: DimensionType;
-  /** Caminho do campo APÓS eventuais lookups, sem o `$`. */
-  expr: string;
-  /** Join necessário pra dimensão. Dimensões com join não podem ser filtradas
-   * (mantém o `$match` indexável). */
-  lookup?: Lookup;
+  /** Expressão SQL do valor mostrado (confiável: vem do catálogo, nunca do cliente). */
+  sql: string;
+  /**
+   * Chave estável para agrupar e filtrar (ex.: id da pessoa). Sem ela, duas
+   * pessoas com o mesmo nome virariam uma linha só. O resultado traz a chave em
+   * `<dimensão>__key` (usada pelo detalhamento).
+   */
+  key?: string;
+  /** Joins nomeados do dataset de que a expressão precisa. */
+  joins?: string[];
+  description?: string;
   format?: ValueFormat;
-  /** Dado pessoal (nome de pessoa). O frontend pode mascarar (LGPD). */
+  /** Nome de pessoa (LGPD): o front pode mascarar. */
   pii?: boolean;
-  /** Rótulos legíveis dos valores de um enum (ex.: CONCLUIDA → Concluída). */
+  /** Rótulos legíveis dos valores de um enum (CONCLUIDA → Concluída). */
   labels?: Record<string, string>;
+  /** Pode virar "separar por". Padrão: true (datas-hora exatas costumam ser false). */
+  groupable?: boolean;
 }
 
 interface MeasureBase {
   title: string;
   format?: ValueFormat;
-  /** Tipo do valor de saída. Padrão: number. `time` para min/max de datas. */
-  valueType?: "number" | "time";
   description?: string;
+  joins?: string[];
 }
 
 export type Measure =
-  | (MeasureBase & { kind: "count"; filter?: MongoExpr })
+  | (MeasureBase & { kind: "count"; filter?: string })
+  | (MeasureBase & { kind: "countDistinct" | "sum" | "avg" | "min" | "max"; sql: string; filter?: string })
   | (MeasureBase & {
-      kind: "countDistinct";
-      field?: string;
-      expr?: MongoExpr;
-      filter?: MongoExpr;
-    })
-  | (MeasureBase & {
-      kind: "sum" | "avg" | "min" | "max";
-      field?: string;
-      expr?: MongoExpr;
-      filter?: MongoExpr;
-    })
-  | (MeasureBase & {
-      /** Medida derivada: SUM(num)/SUM(den), resolvida no $project. */
+      /** Medida derivada: SUM(num)/SUM(den), calculada depois do agrupamento. */
       kind: "ratio";
       numerator: string;
       denominator: string;
     });
 
-export interface SourceOptions {
-  timezone: string;
+/** Placeholders que o compilador entrega à origem de um dataset derivado. */
+export interface SourceParams {
+  /** Empresa da sessão (uuid). */
+  tenant: string;
+  /** Fuso (texto). */
+  tz: string;
+  /** Período pedido, como `date` local (início e fim inclusivos), se houver. */
+  start: string | null;
+  end: string | null;
 }
+
+export type DatasetCategory = "Operação" | "Pessoas" | "Conformidade" | "Contratos";
 
 export interface Dataset {
   /** Nome público (usado na QuerySpec). */
   name: string;
   title: string;
   description: string;
-  /** Collection física consultada. */
-  collection: string;
-  /** O que uma linha representa. */
+  category: DatasetCategory;
+  /** O que uma linha representa (aparece no construtor). */
   grain: string;
-  /** Campo de company usado para isolamento multi-tenant. */
-  tenantField: string;
-  /** Predicado fixo do dataset, somado ao tenant no primeiro `$match`. */
-  baseMatch?: Record<string, unknown>;
+  /** Ícone sugerido para o front (nome do lucide). */
+  icon: string;
+  /** Permissões da API principal exigidas, além de `report:read`. */
+  requires: string[];
   /**
-   * Estágios que derivam o grão do dataset a partir da collection (ex.: parear
-   * entradas e saídas de ponto em jornadas). Rodam DEPOIS do `$match` de tenant.
-   * Filtros e período do usuário passam a ser aplicados sobre os campos
-   * derivados, num segundo `$match`.
+   * Origem com alias `t`: uma tabela (`public.service_orders t`) ou um
+   * subselect derivado. Precisa expor `t.company_id`.
    */
-  source?: (options: SourceOptions) => PipelineStage[];
-  /**
-   * Com `source`, o período do usuário só é aplicado depois da derivação. Para
-   * não varrer o histórico inteiro, o primeiro `$match` recorta o campo bruto
-   * com uma folga (`padDays`) pros dois lados.
-   */
-  prefilter?: { field: string; padDays: number };
+  source: string | ((p: SourceParams) => string);
+  /** Joins nomeados, incluídos só quando alguma dimensão ou medida pede. */
+  joins?: Record<string, { sql: string; requires?: string[] }>;
+  /** Predicado fixo do dataset (SQL confiável). */
+  where?: string;
   defaultTimeDimension?: string;
+  /** O dataset precisa de período (ex.: dias de escala gerados). Sem ele, últimos 30 dias. */
+  needsPeriod?: boolean;
   dimensions: Record<string, Dimension>;
   measures: Record<string, Measure>;
+  /** Detalhamento: colunas (dimensões) da lista de registros e a ordem. */
+  records: {
+    columns: string[];
+    order: string;
+    /** Link do registro no painel (ex.: OS → /admin/ordem-servicos/:id). */
+    link?: { sql: string; kind: "service-order" | "user" | "contract" | "licit" };
+  };
 }
 
 // ---------------------------------------------------------------------------
-// QuerySpec: o contrato público da API
+// QuerySpec: o contrato público
 // ---------------------------------------------------------------------------
 
 export const FILTER_OPERATORS = [
@@ -153,7 +141,7 @@ export type FilterOperator = (typeof FILTER_OPERATORS)[number];
 export interface Filter {
   dimension: string;
   operator: FilterOperator;
-  values?: Array<string | number>;
+  values?: Array<string | number | boolean>;
 }
 
 export const GRANULARITIES = ["day", "week", "month", "quarter", "year"] as const;
@@ -162,8 +150,7 @@ export type Granularity = (typeof GRANULARITIES)[number];
 export interface TimeDimensionSpec {
   dimension: string;
   granularity?: Granularity | null;
-  /** [início, fim]. Datas `YYYY-MM-DD` são dias no fuso da consulta, com o fim
-   * inclusivo. Datas-hora ISO são instantes, com o fim exclusivo. */
+  /** [início, fim] em `YYYY-MM-DD`, dias locais do fuso, fim inclusivo. */
   range?: [string, string];
 }
 
@@ -175,34 +162,45 @@ export interface QuerySpec {
   filters?: Filter[];
   order?: Array<[string, "asc" | "desc"]>;
   limit?: number;
-  /** Fuso para truncar datas e interpretar o período. */
-  timezone?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Segurança e saída
 // ---------------------------------------------------------------------------
 
-/** Derivado EXCLUSIVAMENTE da sessão autenticada. Nunca do corpo da requisição. */
+/** Derivado EXCLUSIVAMENTE da sessão autenticada (ou do agendamento salvo). */
 export interface SecurityContext {
   tenantId: string;
   userId: string;
+  permissions: readonly string[];
 }
 
 export interface ColumnAnnotation {
   title: string;
-  type: "string" | "number" | "time";
+  type: "string" | "number" | "boolean" | "time" | "date";
   format: ValueFormat | null;
+  /** dimension | time (bucket) | measure */
+  role: "dimension" | "bucket" | "measure";
   pii?: boolean;
   labels?: Record<string, string>;
+  /** Bucket de tempo: granularidade (o valor vem como `YYYY-MM-DD` do início). */
+  granularity?: Granularity;
+  /** Dimensão com chave: o resultado traz `<coluna>__key`. */
+  hasKey?: boolean;
 }
 
-export interface CompiledQuery {
-  collection: string;
-  pipeline: PipelineStage[];
+export interface CompiledSql {
+  text: string;
+  params: unknown[];
+}
+
+export interface CompiledQuery extends CompiledSql {
   annotation: Record<string, ColumnAnnotation>;
   /** Colunas na ordem: dimensões, bucket de tempo, medidas. */
   columns: string[];
+  limit: number;
+  /** Período aplicado (o pedido ou o padrão do dataset). */
+  range: [string, string] | null;
 }
 
 export interface QueryResult {
@@ -214,11 +212,12 @@ export interface QueryResult {
     rowCount: number;
     /** Resultado cortado pelo limite. */
     truncated: boolean;
-    pipeline?: PipelineStage[];
+    /** Período efetivamente aplicado (datasets que exigem período ganham um padrão). */
+    range: [string, string] | null;
   };
 }
 
-/** Erro de validação/compilação com detalhe amigável. */
+/** Erro de validação/compilação com mensagem amigável. */
 export class QueryError extends Error {
   constructor(
     public readonly kind: string,

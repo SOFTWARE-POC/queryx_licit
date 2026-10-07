@@ -1,7 +1,6 @@
 node_modules/
 dist/
-web/node_modules/
-web/dist/
+legacy/web/node_modules/
 .env
 *.log
 coverage/

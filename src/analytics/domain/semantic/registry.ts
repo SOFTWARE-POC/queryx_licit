@@ -1,29 +1,43 @@
+import { Catalog } from "../engine/compile";
 import { Dataset } from "../types";
-import { DatasetLookup } from "../engine/compile";
-import { serviceOrdersDataset } from "./datasets/service-orders.dataset";
-import { contractsDataset, licitsDataset } from "./datasets/contracts.dataset";
-import { timeEntriesDataset } from "./datasets/time-entries.dataset";
-import { buildWorkDaysDataset } from "./datasets/work-days.dataset";
+import { CatalogOptions } from "./common";
+import { accessDataset, auditDataset, contractsDataset, licitsDataset } from "./datasets/admin";
+import {
+  assignmentsDataset,
+  executionsDataset,
+  fenceEventsDataset,
+  popUsageDataset,
+  serviceOrdersDataset,
+} from "./datasets/operations";
+import {
+  absencesDataset,
+  attendanceDataset,
+  clockAttemptsDataset,
+  peopleDataset,
+  timeEntriesDataset,
+  workDaysDataset,
+} from "./datasets/people";
 
-export interface CatalogOptions {
-  standardWorkdayMinutes: number;
-}
-
-/**
- * Índice de datasets por nome. Nova área de relatório = novo dataset aqui;
- * nenhum endpoint novo.
- */
-export function buildCatalog(options: CatalogOptions): DatasetLookup {
-  const datasets: Dataset[] = [
-    buildWorkDaysDataset(options.standardWorkdayMinutes),
-    timeEntriesDataset,
+/** Catálogo de temas do BI. Um tema novo aqui aparece no construtor na hora. */
+export function buildCatalog(options: CatalogOptions): Catalog {
+  const list: Dataset[] = [
     serviceOrdersDataset,
+    assignmentsDataset,
+    executionsDataset,
+    fenceEventsDataset,
+    popUsageDataset,
+    workDaysDataset(options),
+    attendanceDataset(options),
+    absencesDataset,
+    peopleDataset,
+    timeEntriesDataset,
+    clockAttemptsDataset,
+    auditDataset,
+    accessDataset,
     contractsDataset,
     licitsDataset,
   ];
-  const byName = new Map(datasets.map((d) => [d.name, d]));
-  return {
-    get: (name) => byName.get(name),
-    list: () => datasets,
-  };
+  const byName = new Map(list.map((d) => [d.name, d]));
+  if (byName.size !== list.length) throw new Error("Catálogo com tema repetido.");
+  return { get: (name) => byName.get(name), list: () => list };
 }

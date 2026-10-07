@@ -1,21 +1,24 @@
-import { isValidTimezone } from "../analytics/domain/engine/zoned-date";
+import { isValidTimezone } from "../analytics/domain/period";
+import { schemaName } from "../database/db";
 
-/** Configuração tipada e validada no boot — o serviço não sobe com env errado. */
+/** Configuração tipada e validada no boot: o serviço não sobe com env errado. */
 export interface AppConfig {
   port: number;
   production: boolean;
-  mongodbUri: string;
-  mongodbDb?: string;
+  databaseUrl: string;
+  dbSchema: string;
+  dbPoolMax: number;
   mainApiUrl: string;
   timezone: string;
   standardWorkdayMinutes: number;
+  lateToleranceMinutes: number;
   authCacheTtlMs: number;
   queryTimeoutMs: number;
   trustProxy: string | undefined;
   throttleLimit: number;
-  allowedOrigins: string[];
-  cookieSecure: boolean;
-  webDir: string;
+  schedulerEnabled: boolean;
+  mail: { provider: "disabled" | "log" | "smtp" | "resend"; from: string; smtpUrl?: string; resendApiKey?: string };
+  panelUrl: string | null;
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
@@ -36,31 +39,50 @@ function required(env: Record<string, unknown>, key: string): string {
   return v.trim();
 }
 
+const str = (env: Record<string, unknown>, key: string) => (typeof env[key] === "string" ? (env[key] as string).trim() : "");
+
+function url(value: string, key: string): string {
+  const u = value.replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(u)) throw new Error(`${key} deve começar com http:// ou https://.`);
+  return u;
+}
+
 export function loadConfig(env: Record<string, unknown> = process.env): AppConfig {
   const production = env.NODE_ENV === "production";
-  const mainApiUrl = required(env, "MAIN_API_URL").replace(/\/+$/, "");
-  if (!/^https?:\/\//.test(mainApiUrl)) throw new Error("MAIN_API_URL deve começar com http:// ou https://.");
-
-  const timezone = (env.REPORTS_TIMEZONE as string | undefined)?.trim() || "America/Sao_Paulo";
+  const timezone = str(env, "REPORTS_TIMEZONE") || "America/Sao_Paulo";
   if (!isValidTimezone(timezone)) throw new Error(`REPORTS_TIMEZONE inválido: ${timezone}`);
 
+  const provider = (str(env, "MAIL_PROVIDER") || "disabled") as AppConfig["mail"]["provider"];
+  if (!["disabled", "log", "smtp", "resend"].includes(provider)) {
+    throw new Error("MAIL_PROVIDER deve ser disabled, log, smtp ou resend.");
+  }
+  const from = str(env, "MAIL_FROM");
+  if ((provider === "smtp" || provider === "resend") && !from) throw new Error("MAIL_FROM é obrigatório para enviar e-mail.");
+  if (provider === "smtp" && !str(env, "SMTP_URL")) throw new Error("SMTP_URL é obrigatório com MAIL_PROVIDER=smtp.");
+  if (provider === "resend" && !str(env, "RESEND_API_KEY")) throw new Error("RESEND_API_KEY é obrigatório com MAIL_PROVIDER=resend.");
+
+  const panel = str(env, "PANEL_URL");
   return {
     port: int(env, "PORT", 3000, 1, 65535),
     production,
-    mongodbUri: required(env, "MONGODB_URI"),
-    mongodbDb: (env.MONGODB_DB as string | undefined)?.trim() || undefined,
-    mainApiUrl,
+    databaseUrl: required(env, "DATABASE_URL"),
+    dbSchema: schemaName(str(env, "DB_SCHEMA")),
+    dbPoolMax: int(env, "DB_POOL_MAX", 10, 1, 100),
+    mainApiUrl: url(required(env, "MAIN_API_URL"), "MAIN_API_URL"),
     timezone,
     standardWorkdayMinutes: int(env, "STANDARD_WORKDAY_MINUTES", 480, 60, 1440),
-    authCacheTtlMs: int(env, "AUTH_CACHE_TTL_SECONDS", 15, 0, 300) * 1000,
+    lateToleranceMinutes: int(env, "LATE_TOLERANCE_MINUTES", 10, 0, 240),
+    authCacheTtlMs: int(env, "AUTH_CACHE_TTL_SECONDS", 30, 0, 300) * 1000,
     queryTimeoutMs: int(env, "QUERY_TIMEOUT_MS", 15000, 1000, 120000),
     trustProxy: env.TRUST_PROXY as string | undefined,
-    throttleLimit: int(env, "THROTTLE_LIMIT", 300, 10, 100000),
-    allowedOrigins: String(env.ALLOWED_ORIGINS ?? "")
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean),
-    cookieSecure: env.COOKIE_SECURE === undefined ? production : env.COOKIE_SECURE === "true",
-    webDir: (env.WEB_DIR as string | undefined)?.trim() || "web/dist",
+    throttleLimit: int(env, "THROTTLE_LIMIT", 600, 10, 100000),
+    schedulerEnabled: str(env, "SCHEDULER_ENABLED") !== "false",
+    mail: {
+      provider,
+      from,
+      smtpUrl: str(env, "SMTP_URL") || undefined,
+      resendApiKey: str(env, "RESEND_API_KEY") || undefined,
+    },
+    panelUrl: panel ? url(panel, "PANEL_URL") : null,
   };
 }

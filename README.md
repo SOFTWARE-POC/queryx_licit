@@ -1,169 +1,132 @@
-# LICITA+ Relatórios (queryx)
+# Licitta Relatórios (queryx)
 
-Microsserviço de relatórios do LICITA+. Um processo só entrega:
+Microsserviço de BI do Licitta. Lê o Postgres da API principal e entrega:
 
-- **API** (NestJS) com uma camada semântica sobre o MongoDB da API principal: o
-  cliente pede *o quê* (medidas, agrupamentos, período) e o serviço compila isso
-  num aggregation pipeline, sempre isolado pela empresa do usuário;
-- **front web** (React) com painel, biblioteca de relatórios, detalhe com
-  gráficos e exportação CSV, e construtor de relatórios personalizados.
+- **Camada semântica:** o painel pede *o quê* (tema, medidas, "separar por",
+  filtros e período) e o serviço monta um `SELECT` parametrizado, sempre
+  restrito à empresa do usuário;
+- **Relatórios prontos** (25, no código) e **relatórios da empresa**, criados
+  no construtor guiado do painel sem rota nova nem deploy;
+- **Painéis** com vários relatórios e um período comum;
+- **Detalhamento:** clicar num número mostra os registros por trás dele;
+- **Exportação** CSV (para o Excel em português) e XLSX;
+- **Envio agendado por e-mail** (diário, semanal ou mensal), com o XLSX/CSV anexo.
 
-Um relatório novo é um JSON salvo no construtor — sem rota nova, sem deploy.
-
-## Como funciona
+A tela fica no painel web (`/admin/relatorios`). O serviço não tem domínio
+público: o painel chama a API principal em `/bi/*`, e ela repassa para cá pela
+rede privada, junto com o token da sessão.
 
 ```
-Navegador ──(cookie httpOnly)──▶ queryx ──(Bearer)──▶ API principal  /auth/login, /auth/me
-                                   │
-                                   └──(driver nativo)──▶ MongoDB (mesmo banco da API)
+Painel ──(cookie)──▶ API principal /bi/* ──(Bearer, rede privada)──▶ queryx /api/*
+                                                                       │
+                     GET /auth/me ◀── valida token e permissões ───────┤
+                                                                       └──▶ Postgres (public: leitura; relatorios: escrita)
 ```
 
-- **Login:** o front envia CPF e senha para `POST /api/session/login`; o serviço
-  faz o login na API principal e guarda o token num cookie httpOnly deste domínio.
-  O JavaScript do navegador nunca vê o token, e não é preciso CORS entre o front e
-  a API principal.
-- **Cada requisição** é validada em `GET /auth/me` da API principal (cache de
-  15s). Assim valem aqui, na hora, a revogação de sessão, a desativação de
-  usuário e as permissões do RBAC.
-- **Permissões** (catálogo da API principal): `report:read` para ver e executar
-  relatórios; `report:manage` para criar, editar e excluir os personalizados.
-- **Tenant:** a empresa vem sempre da sessão e entra no primeiro `$match` de toda
-  consulta. Nada no corpo da requisição consegue trocá-la.
+## Segurança
 
-## Subindo no Railway
+- **Empresa:** vem do `/auth/me` da API principal e é o primeiro predicado de
+  toda consulta (`t.company_id = $1`). Nada no corpo da requisição a troca.
+- **SQL:** os fragmentos SQL vêm só do catálogo (código). Valores do usuário são
+  sempre parâmetros. Nomes de tema, campo e medida são validados e conferidos no
+  catálogo antes de virar SQL.
+- **Pool só de leitura** para o BI (`default_transaction_read_only`) e com
+  `statement_timeout` (`QUERY_TIMEOUT_MS`). As escritas do serviço usam outro
+  pool, só no schema `relatorios`.
+- **Permissões:** `report:read` para ver e rodar relatórios e `report:manage`
+  para criar, editar e excluir relatórios, painéis e agendamentos. Cada tema
+  também exige a permissão do módulo dele (`service-order:read`,
+  `timeclock:read`, `absence:read`, `user:read`, `audit:read`,
+  `contract:read`, `licit:read`, `pops:read`). Quem não a tem não vê o tema, os
+  relatórios dele nem os itens de painel dele.
+- **Envios agendados** rodam com as permissões **atuais** do dono (quem criou ou
+  editou por último). Cada destinatário só recebe se estiver ativo na empresa e
+  puder ver relatórios e os temas do conteúdo. Vai um e-mail por pessoa, então
+  ninguém vê o endereço dos outros.
 
-1. **Aplique o patch da API principal** (`api-principal-relatorios.patch`): ele
-   cria as permissões `report:read`/`report:manage`, tira o `/auth/me` do rate
-   limit por IP e deixa o host de escuta configurável. Faça o deploy da API.
-2. **Crie um serviço** no mesmo projeto do Railway apontando para este
-   repositório. O `railway.json` usa o `Dockerfile` e o healthcheck `/api/health`.
-3. **Configure as variáveis** (veja `.env.example`):
-   - `MONGODB_URI` — o mesmo banco da API principal;
-   - `MAIN_API_URL` — pela rede privada: `http://<servico-api>.railway.internal:<PORT>`.
-     Se o ambiente tiver rede privada só IPv6, defina `HOST=::` **na API principal**.
-     A URL pública da API também funciona, mas aí o rate limit de login da API
-     passa a contar todos os usuários como um IP só.
-4. **Gere um domínio** para o serviço. Pronto: abra a URL e entre com o CPF e a
-   senha do LICITA+.
+## Temas (catálogo)
 
-Usuários ADMIN recebem as duas permissões no primeiro boot da API com o patch;
-MANAGER recebe `report:read`. Ajuste por `PATCH /roles/:id/permissions`.
+| Tema | Uma linha é | Destaques |
+|---|---|---|
+| `service_orders` | uma OS | situação, prazo (no prazo, atrasada, concluída com atraso), conclusão, tempo até concluir, por time |
+| `assignments` | uma OS enviada a uma pessoa | aceite, recusa e motivo, tempo de resposta, direto ou pelo time |
+| `executions` | uma execução enviada | aprovação de primeira, ajustes, tempo até avaliar, fotos |
+| `fence_events` | uma saída ou retorno da cerca | saídas por pessoa e OS, distância, se o gestor viu |
+| `pop_usage` | um POP numa OS | POPs mais usados e conclusão |
+| `work_days` | um dia trabalhado | horas, média diária, horas acima da jornada, primeira entrada e última saída |
+| `attendance` | um dia de escala | presença, falta, falta abonada, atraso (contra a escala e os abonos aprovados) |
+| `absences` | um pedido de abono | aprovados, rejeitados, dias abonados, tempo de decisão |
+| `people` | um usuário | perfil e status agora (disponível, ausente, offline) |
+| `time_entries` | uma marcação | origem, ajustes e invalidações com autor e justificativa |
+| `clock_attempts` | uma tentativa de ponto | recusas e motivo |
+| `audit` | uma alteração | quem criou, alterou ou excluiu o quê |
+| `access` | um evento de acesso | logins e falhas |
+| `contracts` | um contrato | vigência, vencendo em 90 dias, valores |
+| `licits` | uma licitação | modalidade, valor estimado e contratado |
 
-## Desenvolvimento
+Para **adicionar uma medida ou um campo**, edite o tema em
+`src/analytics/domain/semantic/datasets/`. Ele aparece na hora no construtor.
+O teste `test/datasets.spec.ts` roda **todas** as medidas e campos de todos os
+temas num Postgres de verdade. SQL errado não passa no CI.
 
-```bash
-npm install && npm --prefix web install
-cp .env.example .env         # aponte para um Mongo e para a API principal locais
-npm run dev                   # API em http://localhost:3000
-npm run dev:web               # front em http://localhost:5174 (proxy /api → 3000)
-npm test                      # 67 testes
-npm run build                 # dist/ (API) + web/dist (front)
+```typescript
+reopened_count: { kind: "count", title: "Reabertas", format: "integer", filter: "t.status = 'REABERTA'" },
 ```
 
-Requer Node 22 e MongoDB 5.0+ (`$setWindowFields`, `$dateTrunc`).
+## API (`/api`, Bearer da API principal)
 
-## API
+| Método | Rota | Permissão |
+|---|---|---|
+| `GET` | `/health` | pública |
+| `GET` | `/me` | `report:read` |
+| `GET` | `/analytics/catalog` | `report:read` |
+| `POST` | `/analytics/query` · `/analytics/records` · `/analytics/values` · `/analytics/export` | `report:read` |
+| `GET` | `/reports` · `/reports/:id` · `/reports/:id/export?format=xlsx\|csv&from&to` | `report:read` |
+| `POST/PUT/DELETE` | `/reports[/:id]` | `report:manage` |
+| `GET` | `/dashboards` · `/dashboards/:id` · `/dashboards/:id/export?from&to` | `report:read` |
+| `POST/PUT/DELETE` | `/dashboards[/:id]` | `report:manage` |
+| `GET/POST/PUT/DELETE` | `/schedules[/:id]`, `/schedules/recipients`, `POST /schedules/:id/run`, `GET /schedules/:id/runs` | `report:manage` |
 
-| Método | Rota | Permissão | Descrição |
-|---|---|---|---|
-| `POST` | `/api/session/login` | pública | Login (CPF e senha do LICITA+). Grava o cookie de sessão. |
-| `GET` | `/api/session` | sessão | Usuário, empresa e se pode gerenciar relatórios. |
-| `POST` | `/api/session/logout` | pública | Encerra a sessão deste navegador. |
-| `POST` | `/api/analytics/query` | `report:read` | Executa uma QuerySpec. |
-| `GET` | `/api/analytics/meta` | `report:read` | Catálogo: datasets, dimensões e medidas. |
-| `GET` | `/api/reports` | `report:read` | Relatórios do sistema + os personalizados da empresa. |
-| `GET` | `/api/reports/:id` | `report:read` | Um relatório. |
-| `POST` | `/api/reports` | `report:manage` | Cria um relatório personalizado. |
-| `PUT` | `/api/reports/:id` | `report:manage` | Edita um personalizado. |
-| `DELETE` | `/api/reports/:id` | `report:manage` | Exclui um personalizado. |
-| `GET` | `/api/health` | pública | Healthcheck (ping no MongoDB). |
-
-Integrações podem usar `Authorization: Bearer <token da API principal>` em vez do
-cookie (e `ALLOWED_ORIGINS` para CORS).
-
-### Exemplo de consulta
+Exemplo de consulta:
 
 ```json
 POST /api/analytics/query
 {
-  "dataset": "work_days",
-  "dimensions": ["employee"],
-  "measures": ["days_worked", "worked_hours", "overtime_hours"],
+  "dataset": "attendance",
+  "dimensions": ["person"],
+  "measures": ["scheduled_days", "absent_days", "late_minutes", "attendance_rate"],
   "timeDimension": { "dimension": "day", "range": ["2026-09-01", "2026-09-30"] },
-  "order": [["worked_hours", "desc"]]
+  "order": [["absent_days", "desc"]]
 }
 ```
 
-Datas `YYYY-MM-DD` são dias no fuso `REPORTS_TIMEZONE`, com o fim inclusivo.
+Datas são `AAAA-MM-DD`, dias no fuso `REPORTS_TIMEZONE`, com o fim inclusivo.
 
-## Datasets
+## Subindo no Railway
 
-| Dataset | Collection | Uma linha é | Destaques |
-|---|---|---|---|
-| `work_days` | `timeentries` (derivado) | um dia trabalhado de um funcionário | horas trabalhadas, média diária, horas acima da jornada, primeira entrada/última saída |
-| `time_entries` | `timeentries` | uma marcação de ponto | origem, ajustes e invalidações com autor e justificativa |
-| `service_orders` | `serviceorders` | uma OS (estado atual) | concluídas, em aberto, em atraso, taxa de conclusão |
-| `contracts` | `contracts` | um contrato | ativos, valor, vencimento em 90 dias, órgão |
-| `licits` | `licits` | uma licitação | abertas, finalizadas, valor estimado |
+1. Crie um serviço apontando para este repositório. O `railway.json` usa o
+   `Dockerfile`, roda `node dist/migrate-cli.js` no pre-deploy (cria o schema
+   `relatorios`) e usa o healthcheck `/api/health`.
+2. Variáveis (veja `.env.example`): `DATABASE_URL` (o mesmo banco da API),
+   `MAIN_API_URL` (rede privada) e, para e-mail, `MAIL_PROVIDER`, `MAIL_FROM` e
+   `SMTP_URL` ou `RESEND_API_KEY`. O Railway pode bloquear SMTP em alguns
+   planos. Nesse caso use `resend`.
+3. **Não gere domínio público.** Na API principal, configure
+   `REPORTS_SERVICE_URL=http://<este-servico>.railway.internal:<PORT>`.
 
-**Jornada (`work_days`)** pareia cada entrada com a marcação seguinte do mesmo
-funcionário; turnos que cruzam a meia-noite contam no dia em que começaram;
-marcações invalidadas não entram e ajustadas entram com o horário ajustado.
-"Horas acima da jornada" compara com `STANDARD_WORKDAY_MINUTES` (8h), não com a
-escala contratada de cada pessoa.
+## Desenvolvimento
 
-### Como adicionar uma medida
-
-Edite o dataset em `src/analytics/domain/semantic/datasets/`. Ela aparece na hora
-no construtor e em `/api/analytics/meta`:
-
-```typescript
-reopened_count: {
-  kind: "count",
-  title: "Reabertas",
-  format: "integer",
-  filter: { $eq: ["$status", "REABERTA"] },
-},
+```bash
+npm install
+cp .env.example .env
+npm run dev            # http://localhost:3000/api
+npm test               # 77 testes (PGlite com o schema real da API)
+npm run build
 ```
 
-## Garantias do compilador (cobertas por testes)
+Os testes sobem um Postgres em memória com as migrations da API principal
+copiadas em `test/fixtures/backend-schema`. Quando a API ganhar migration que
+mexa em tabela usada aqui, rode `npm run sync:backend-schema`.
 
-1. O primeiro estágio de todo pipeline é um `$match` com a empresa da sessão.
-2. Valores do usuário só entram como valores (nunca como expressão); texto de
-   busca é escapado, sem regex do cliente.
-3. Ratios são `SUM(num)/SUM(den)`, resolvidos no `$project` — nunca média de taxas.
-4. `limit` tem teto (10.000) mesmo sem o cliente mandar.
-5. Filtro em dimensão com join é recusado (mantém o `$match` indexável).
-6. Joins em `users` trazem só o campo `name`.
-
-## O que o mockup tinha e ainda não tem fonte de dados
-
-Ficaram de fora, porque o banco não tem o dado: faltas e atrasos contra a escala
-contratada, custo de mão de obra (folha e encargos), aderência a POPs aplicados,
-marcações fora do perímetro (geolocalização), recortes por unidade e equipe,
-envio agendado por e-mail e exportação em PDF/XLSX. A OS também não guarda data de
-conclusão, então "concluídas no prazo" não é calculável — só atraso das abertas.
-
-## Estrutura
-
-```
-src/
-├── analytics/
-│   ├── domain/              # engine puro: types, validation, engine/, semantic/ (catálogo)
-│   ├── application/         # RunQuery, GetCatalog, port do executor
-│   └── infrastructure/      # executor MongoDB, controller
-├── reports/                 # relatórios do sistema (código) e personalizados (Mongo)
-├── auth/                    # sessão (BFF), guard, adapter da API principal
-├── config/                  # env validado no boot
-└── http-setup.ts            # helmet/CSP, cookies, prefixo /api, serve o front
-web/                         # front React (Vite)
-```
-
-## Testes
-
-`npm test` roda 67 testes: invariantes do compilador, execução dos pipelines com
-[mingo](https://github.com/kofrasa/mingo) sobre fixtures (pareamento de ponto,
-fuso, ratios, joins, isolamento de tenant), validação, relatórios do sistema, o
-adapter da API principal contra um servidor HTTP real e a API ponta a ponta.
-O mingo não substitui um teste contra MongoDB real — rode um relatório de cada
-dataset em homologação antes de liberar.
+`legacy/` guarda a versão antiga (MongoDB + front próprio), só como referência.
+Pode ser apagada.
