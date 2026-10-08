@@ -282,6 +282,21 @@ const REPORTS: Sys[] = [
     defaultPeriod: "this_month",
   },
   {
+    id: "sys-offline",
+    name: "Batidas feitas sem internet",
+    description: "Marcações feitas no app sem conexão: horário da batida, quando chegou ao servidor e a origem.",
+    category: "Conformidade",
+    visualization: "table",
+    spec: {
+      dataset: "time_entries",
+      dimensions: ["timestamp", "received", "person", "type", "source", "status"],
+      measures: ["entry_count"],
+      filters: [{ dimension: "offline", operator: "equals", values: [true] }],
+      order: [["timestamp", "desc"]],
+    },
+    defaultPeriod: "this_month",
+  },
+  {
     id: "sys-tentativas",
     name: "Tentativas de ponto recusadas",
     description: "Por que o ponto foi recusado (fora do perímetro, rosto não confere...).",

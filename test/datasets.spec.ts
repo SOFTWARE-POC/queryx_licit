@@ -157,6 +157,19 @@ describe("números conferidos com os dados semeados", () => {
     expect(l.data[0]).toMatchObject({ licit_count: 1, contract_count: 2, contracted_value: 100000 });
   });
 
+  it("marcações feitas sem internet", async () => {
+    const r = await run({ dataset: "time_entries", measures: ["entry_count", "offline_count", "offline_rate"] });
+    expect(r.data[0]).toMatchObject({ entry_count: 9, offline_count: 1 });
+    expect(r.data[0].offline_rate).toBeCloseTo(1 / 9, 5);
+    const byConn = await run({ dataset: "time_entries", measures: ["entry_count"], dimensions: ["offline"] });
+    expect(byConn.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ offline: true, entry_count: 1 }),
+        expect.objectContaining({ offline: false, entry_count: 8 }),
+      ]),
+    );
+  });
+
   it("pessoas: status agora entre as ativas", async () => {
     const r = await run({ dataset: "people", measures: ["people_count", "active_count", "available_count", "availability_rate"] });
     expect(r.data[0]).toMatchObject({ people_count: 5, active_count: 4, available_count: 2, availability_rate: 0.5 });

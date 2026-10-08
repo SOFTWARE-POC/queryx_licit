@@ -223,11 +223,26 @@ export const timeEntriesDataset: Dataset = {
     status: { title: "Situação", type: "string", sql: "t.status", labels: TIME_ENTRY_STATUS },
     adjusted_by: person("Ajustada por", "t.adjusted_by", "adj.name", "adjuster"),
     reason: { title: "Justificativa", type: "string", sql: "t.adjusted_reason" },
+    offline: {
+      title: "Conexão",
+      type: "boolean",
+      sql: "t.offline",
+      labels: { true: "Feita sem internet", false: "Online" },
+    },
     timestamp: { title: "Data e hora", type: "time", sql: "t.timestamp" },
+    received: { title: "Recebida em", type: "time", sql: "t.created_at" },
     original: { title: "Horário original", type: "time", sql: "t.original_timestamp" },
   },
   measures: {
     entry_count: { kind: "count", title: "Marcações", format: "integer" },
+    offline_count: { kind: "count", title: "Feitas sem internet", format: "integer", filter: "t.offline" },
+    offline_rate: {
+      kind: "ratio",
+      title: "Taxa sem internet",
+      numerator: "offline_count",
+      denominator: "entry_count",
+      format: "percent",
+    },
     clock_in_count: { kind: "count", title: "Entradas", format: "integer", filter: "t.type = 'CLOCK_IN'" },
     clock_out_count: { kind: "count", title: "Saídas", format: "integer", filter: "t.type = 'CLOCK_OUT'" },
     adjusted_count: { kind: "count", title: "Ajustadas", format: "integer", filter: "t.status = 'ADJUSTED'" },
@@ -258,7 +273,7 @@ export const timeEntriesDataset: Dataset = {
     people_count: { kind: "countDistinct", title: "Pessoas", format: "integer", sql: "t.user_id" },
   },
   records: {
-    columns: ["timestamp", "person", "type", "source", "status", "original", "adjusted_by", "reason"],
+    columns: ["timestamp", "person", "type", "source", "offline", "status", "original", "adjusted_by", "reason"],
     order: "t.timestamp DESC",
   },
 };

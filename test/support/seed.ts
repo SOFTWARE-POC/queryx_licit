@@ -165,6 +165,9 @@ export async function seed(db: Db): Promise<void> {
       ('${A}', '${U.carla}', 'CLOCK_OUT', ${ts("2026-09-02 06:00")}, 'API', 'VALID', NULL, NULL, NULL, NULL),
       ('${B}', '${U.beto}', 'CLOCK_IN', ${ts("2026-09-01 08:00")}, 'API', 'VALID', NULL, NULL, NULL, NULL),
       ('${B}', '${U.beto}', 'CLOCK_OUT', ${ts("2026-09-01 20:00")}, 'API', 'VALID', NULL, NULL, NULL, NULL);
+    -- Saída da Carla feita sem internet e enviada às 07:40.
+    UPDATE time_entries SET offline = true, client_entry_id = 'p-carla-0001', created_at = ${ts("2026-09-02 07:40")}
+     WHERE user_id = '${U.carla}' AND type = 'CLOCK_OUT';
 
     INSERT INTO time_clock_attempts (company_id, user_id, type, accepted, error) VALUES
       ('${A}', '${U.bruno}', 'CLOCK_IN', true, NULL),
