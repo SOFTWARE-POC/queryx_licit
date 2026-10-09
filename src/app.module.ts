@@ -79,7 +79,11 @@ function mailerFor(config: AppConfig): Mailer {
       provide: CATALOG,
       inject: [APP_CONFIG],
       useFactory: (c: AppConfig) =>
-        buildCatalog({ standardWorkdayMinutes: c.standardWorkdayMinutes, lateToleranceMinutes: c.lateToleranceMinutes }),
+        buildCatalog({
+          standardWorkdayMinutes: c.standardWorkdayMinutes,
+          lateToleranceMinutes: c.lateToleranceMinutes,
+          earlyLeaveToleranceMinutes: c.earlyLeaveToleranceMinutes,
+        }),
     },
     {
       provide: IDENTITY_PROVIDER,

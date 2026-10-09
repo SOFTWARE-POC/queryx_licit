@@ -12,6 +12,7 @@ export interface AppConfig {
   timezone: string;
   standardWorkdayMinutes: number;
   lateToleranceMinutes: number;
+  earlyLeaveToleranceMinutes: number;
   authCacheTtlMs: number;
   queryTimeoutMs: number;
   trustProxy: string | undefined;
@@ -72,6 +73,7 @@ export function loadConfig(env: Record<string, unknown> = process.env): AppConfi
     timezone,
     standardWorkdayMinutes: int(env, "STANDARD_WORKDAY_MINUTES", 480, 60, 1440),
     lateToleranceMinutes: int(env, "LATE_TOLERANCE_MINUTES", 10, 0, 240),
+    earlyLeaveToleranceMinutes: int(env, "EARLY_LEAVE_TOLERANCE_MINUTES", 10, 0, 240),
     authCacheTtlMs: int(env, "AUTH_CACHE_TTL_SECONDS", 30, 0, 300) * 1000,
     queryTimeoutMs: int(env, "QUERY_TIMEOUT_MS", 15000, 1000, 120000),
     trustProxy: env.TRUST_PROXY as string | undefined,

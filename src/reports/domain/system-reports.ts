@@ -203,7 +203,7 @@ const REPORTS: Sys[] = [
   {
     id: "sys-assiduidade",
     name: "Assiduidade x escala",
-    description: "Dias de escala, presenças, faltas, faltas abonadas e atrasos de cada pessoa.",
+    description: "Dias de escala, presenças, faltas, faltas abonadas, atrasos e saídas antecipadas de cada pessoa.",
     category: "Pessoas",
     visualization: "table",
     spec: {
@@ -216,6 +216,8 @@ const REPORTS: Sys[] = [
         "excused_days",
         "late_days",
         "late_minutes",
+        "early_leave_days",
+        "early_leave_minutes",
         "attendance_rate",
         "punctuality_rate",
       ],
@@ -226,12 +228,12 @@ const REPORTS: Sys[] = [
   {
     id: "sys-faltas-dia",
     name: "Faltas e atrasos por dia",
-    description: "Faltas, faltas abonadas e atrasos contra a escala, dia a dia.",
+    description: "Faltas, faltas abonadas, atrasos e saídas antecipadas contra a escala, dia a dia.",
     category: "Pessoas",
     visualization: "bar",
     spec: {
       dataset: "attendance",
-      measures: ["absent_days", "excused_days", "late_days"],
+      measures: ["absent_days", "excused_days", "late_days", "early_leave_days"],
       timeDimension: { dimension: "day", granularity: "day" },
     },
     defaultPeriod: "this_month",

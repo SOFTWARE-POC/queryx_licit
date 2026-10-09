@@ -17,8 +17,12 @@ export const P = {
 export interface CatalogOptions {
   /** Jornada diária padrão (min) para "horas acima da jornada". */
   standardWorkdayMinutes: number;
-  /** Tolerância (min) antes de contar atraso contra a escala. */
+  /**
+   * Tolerâncias padrão (min) contra a escala, usadas quando nem a escala nem a
+   * empresa (attendance_settings da API) definem as suas.
+   */
   lateToleranceMinutes: number;
+  earlyLeaveToleranceMinutes?: number;
 }
 
 /** Pessoa por id (agrupa pelo id: homônimos não se fundem). */
