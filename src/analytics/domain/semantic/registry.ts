@@ -14,6 +14,7 @@ import {
   attendanceDataset,
   clockAttemptsDataset,
   peopleDataset,
+  siteFenceEventsDataset,
   timeEntriesDataset,
   workDaysDataset,
 } from "./datasets/people";
@@ -31,6 +32,7 @@ export function buildCatalog(options: CatalogOptions): Catalog {
     absencesDataset,
     peopleDataset,
     timeEntriesDataset,
+    siteFenceEventsDataset,
     clockAttemptsDataset,
     auditDataset,
     accessDataset,

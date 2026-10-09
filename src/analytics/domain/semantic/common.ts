@@ -40,3 +40,10 @@ export const WEEKDAY_SQL = (dateSql: string) => `extract(isodow FROM ${dateSql})
 
 /** Horas entre dois instantes. */
 export const hoursBetween = (from: string, to: string) => `extract(epoch FROM (${to} - ${from})) / 3600.0`;
+
+/**
+ * Evento de cerca com ao menos um aviso enviado (e-mail ou WhatsApp) — a
+ * evidência de que o gestor foi avisado fica em fence_alert_deliveries.
+ */
+export const alertedSql = (source: "SERVICE_ORDER" | "WORK_SITE") =>
+  `EXISTS (SELECT 1 FROM public.fence_alert_deliveries fad WHERE fad.source = '${source}' AND fad.event_id = t.id AND fad.status = 'SENT')`;

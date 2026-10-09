@@ -1,5 +1,5 @@
 import { Dataset } from "../../types";
-import { hoursBetween, P, person, userJoin } from "../common";
+import { alertedSql, hoursBetween, P, person, userJoin } from "../common";
 import {
   ACCEPTANCE,
   EXEC_STATUS,
@@ -348,12 +348,24 @@ export const fenceEventsDataset: Dataset = {
       sql: "(t.acknowledged_at IS NOT NULL)",
       labels: YES_NO,
     },
+    alerted: {
+      title: "Gestor avisado (e-mail/WhatsApp)",
+      type: "boolean",
+      sql: alertedSql("SERVICE_ORDER"),
+      labels: YES_NO,
+    },
     distance: { title: "Distância do centro", type: "number", sql: "t.distance_m", format: "meters", groupable: false },
     occurred: { title: "Quando", type: "time", sql: "t.occurred_at" },
   },
   measures: {
     event_count: { kind: "count", title: "Eventos", format: "integer" },
     exit_count: { kind: "count", title: "Saídas", format: "integer", filter: "t.type = 'SAIDA'" },
+    alerted_exit_count: {
+      kind: "count",
+      title: "Saídas avisadas por e-mail/WhatsApp",
+      format: "integer",
+      filter: `t.type = 'SAIDA' AND ${alertedSql("SERVICE_ORDER")}`,
+    },
     return_count: { kind: "count", title: "Retornos", format: "integer", filter: "t.type = 'RETORNO'" },
     unseen_exit_count: {
       kind: "count",
@@ -391,7 +403,7 @@ export const fenceEventsDataset: Dataset = {
     },
   },
   records: {
-    columns: ["occurred", "person", "event_type", "type_service", "place", "distance", "acknowledged"],
+    columns: ["occurred", "person", "event_type", "type_service", "place", "distance", "alerted", "acknowledged"],
     order: "t.occurred_at DESC",
     link: { sql: "t.service_order_id", kind: "service-order" },
   },

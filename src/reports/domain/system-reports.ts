@@ -126,6 +126,20 @@ const REPORTS: Sys[] = [
     defaultPeriod: "last_30_days",
   },
   {
+    id: "sys-cerca-local",
+    name: "Saídas do local de ponto",
+    description: "Quem saiu do local de ponto durante a jornada, quantas vezes, quanto se afastou e se o gestor foi avisado.",
+    category: "Pessoas",
+    visualization: "hbar",
+    spec: {
+      dataset: "site_fence_events",
+      dimensions: ["person"],
+      measures: ["exit_count", "site_count", "avg_distance", "alerted_exit_count", "unseen_exit_count"],
+      order: [["exit_count", "desc"]],
+    },
+    defaultPeriod: "last_30_days",
+  },
+  {
     id: "sys-pops",
     name: "POPs mais usados",
     description: "Procedimentos aplicados nas OS e quanto delas foi concluído.",

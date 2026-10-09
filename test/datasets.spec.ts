@@ -157,6 +157,31 @@ describe("números conferidos com os dados semeados", () => {
     expect(l.data[0]).toMatchObject({ licit_count: 1, contract_count: 2, contracted_value: 100000 });
   });
 
+  it("cerca do local de ponto: saídas, quanto fora, avisos enviados (evidência) e vistos", async () => {
+    const r = await run({
+      dataset: "site_fence_events",
+      measures: ["exit_count", "return_count", "unseen_exit_count", "alerted_exit_count", "alert_rate", "site_count", "avg_distance"],
+    });
+    expect(r.data[0]).toMatchObject({
+      exit_count: 2,
+      return_count: 1,
+      unseen_exit_count: 1,
+      alerted_exit_count: 1,
+      alert_rate: 0.5,
+      site_count: 2,
+      avg_distance: 80,
+    });
+    const bySite = await run({ dataset: "site_fence_events", measures: ["exit_count"], dimensions: ["site", "shape"] });
+    expect(bySite.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ site: "Sede", shape: "CIRCLE", exit_count: 1 }),
+        expect.objectContaining({ site: "Obra", shape: "POLYGON", exit_count: 1 }),
+      ]),
+    );
+    const os = await run({ dataset: "fence_events", measures: ["exit_count", "alerted_exit_count"] });
+    expect(os.data[0]).toMatchObject({ exit_count: 1, alerted_exit_count: 1 });
+  });
+
   it("marcações feitas sem internet", async () => {
     const r = await run({ dataset: "time_entries", measures: ["entry_count", "offline_count", "offline_rate"] });
     expect(r.data[0]).toMatchObject({ entry_count: 9, offline_count: 1 });

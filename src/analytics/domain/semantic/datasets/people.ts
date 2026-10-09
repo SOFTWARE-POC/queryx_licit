@@ -1,9 +1,11 @@
 import { Dataset, SourceParams } from "../../types";
-import { CatalogOptions, hoursBetween, P, person, userJoin, WEEKDAY_SQL } from "../common";
+import { alertedSql, CatalogOptions, hoursBetween, P, person, userJoin, WEEKDAY_SQL } from "../common";
 import {
   ABSENCE_STATUS,
   ABSENCE_TYPE,
   ATTENDANCE,
+  FENCE_EVENT,
+  YES_NO,
   PRESENCE,
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_STATUS,
@@ -275,6 +277,103 @@ export const timeEntriesDataset: Dataset = {
   records: {
     columns: ["timestamp", "person", "type", "source", "offline", "status", "original", "adjusted_by", "reason"],
     order: "t.timestamp DESC",
+  },
+};
+
+/** Saídas do local de ponto detectadas pelo app durante a jornada. */
+export const siteFenceEventsDataset: Dataset = {
+  name: "site_fence_events",
+  title: "Cerca do local de ponto",
+  description:
+    "Saídas e retornos do local de ponto durante a jornada: quem, de onde, quanto fora do perímetro, se o gestor foi avisado e se viu.",
+  category: "Pessoas",
+  grain: "uma saída ou retorno do local de ponto",
+  icon: "MapPinOff",
+  requires: [P.TIMECLOCK_READ],
+  source: `public.work_site_fence_events t
+  JOIN public.work_sites s ON s.id = t.site_id AND s.company_id = t.company_id`,
+  joins: { person: userJoin("u", "t.user_id") },
+  defaultTimeDimension: "occurred",
+  dimensions: {
+    person: person("Pessoa", "t.user_id", "u.name", "person"),
+    event_type: { title: "Evento", type: "string", sql: "t.type", labels: FENCE_EVENT },
+    site: { title: "Local de ponto", type: "string", sql: "s.name", key: "t.site_id" },
+    shape: {
+      title: "Perímetro",
+      type: "string",
+      sql: "CASE WHEN s.polygon IS NULL THEN 'CIRCLE' ELSE 'POLYGON' END",
+      labels: { CIRCLE: "Círculo", POLYGON: "Polígono" },
+    },
+    alerted: {
+      title: "Gestor avisado (e-mail/WhatsApp)",
+      type: "boolean",
+      sql: alertedSql("WORK_SITE"),
+      labels: YES_NO,
+    },
+    acknowledged: {
+      title: "Visto pelo gestor",
+      type: "boolean",
+      sql: "(t.acknowledged_at IS NOT NULL)",
+      labels: YES_NO,
+    },
+    distance: { title: "Fora do perímetro", type: "number", sql: "t.distance_m", format: "meters", groupable: false },
+    occurred: { title: "Quando", type: "time", sql: "t.occurred_at" },
+  },
+  measures: {
+    event_count: { kind: "count", title: "Eventos", format: "integer" },
+    exit_count: { kind: "count", title: "Saídas", format: "integer", filter: "t.type = 'SAIDA'" },
+    return_count: { kind: "count", title: "Retornos", format: "integer", filter: "t.type = 'RETORNO'" },
+    unseen_exit_count: {
+      kind: "count",
+      title: "Saídas não vistas",
+      format: "integer",
+      filter: "t.type = 'SAIDA' AND t.acknowledged_at IS NULL",
+    },
+    alerted_exit_count: {
+      kind: "count",
+      title: "Saídas avisadas por e-mail/WhatsApp",
+      format: "integer",
+      filter: `t.type = 'SAIDA' AND ${alertedSql("WORK_SITE")}`,
+    },
+    alert_rate: {
+      kind: "ratio",
+      title: "Saídas avisadas",
+      numerator: "alerted_exit_count",
+      denominator: "exit_count",
+      format: "percent",
+    },
+    people_count: {
+      kind: "countDistinct",
+      title: "Pessoas que saíram",
+      format: "integer",
+      sql: "t.user_id",
+      filter: "t.type = 'SAIDA'",
+    },
+    site_count: {
+      kind: "countDistinct",
+      title: "Locais com saída",
+      format: "integer",
+      sql: "t.site_id",
+      filter: "t.type = 'SAIDA'",
+    },
+    avg_distance: {
+      kind: "avg",
+      title: "Média fora do perímetro",
+      format: "meters",
+      sql: "t.distance_m",
+      filter: "t.type = 'SAIDA'",
+    },
+    max_distance: {
+      kind: "max",
+      title: "Maior distância fora",
+      format: "meters",
+      sql: "t.distance_m",
+      filter: "t.type = 'SAIDA'",
+    },
+  },
+  records: {
+    columns: ["occurred", "person", "event_type", "site", "distance", "alerted", "acknowledged"],
+    order: "t.occurred_at DESC",
   },
 };
 

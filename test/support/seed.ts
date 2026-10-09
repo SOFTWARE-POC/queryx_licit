@@ -142,6 +142,29 @@ export async function seed(db: Db): Promise<void> {
       ('${A}', '${OS.os1}', '${U.bruno}', 'SAIDA', -23.51, -46.6, 300, ${ts("2026-09-03 11:00")}),
       ('${A}', '${OS.os1}', '${U.bruno}', 'RETORNO', -23.5, -46.6, 20, ${ts("2026-09-03 11:30")});
 
+    -- Saída da OS avisada por e-mail (evidência).
+    INSERT INTO fence_alert_deliveries (company_id, source, event_id, channel, recipient, status)
+      SELECT company_id, 'SERVICE_ORDER', id, 'EMAIL', 'gil@a.com', 'SENT' FROM service_order_fence_events WHERE type = 'SAIDA';
+
+    -- Locais de ponto: Sede (círculo) e Obra (polígono). Bruno saiu da Sede e foi
+    -- avisado por e-mail; Carla saiu da Obra, o WhatsApp falhou e o gestor viu.
+    INSERT INTO work_sites (id, company_id, name, lat, lng, radius_m, polygon) VALUES
+      ('a5000000-0000-4000-8000-000000000001', '${A}', 'Sede', -23.5, -46.6, 100, NULL),
+      ('a5000000-0000-4000-8000-000000000002', '${A}', 'Obra', -23.6, -46.7, 120, '[[-23.6,-46.7],[-23.6,-46.699],[-23.599,-46.699]]'),
+      ('b5000000-0000-4000-8000-000000000001', '${B}', 'Filial', -22.9, -43.2, 100, NULL);
+    INSERT INTO work_site_members (company_id, site_id, user_id) VALUES
+      ('${A}', 'a5000000-0000-4000-8000-000000000001', '${U.bruno}'),
+      ('${A}', 'a5000000-0000-4000-8000-000000000002', '${U.carla}'),
+      ('${B}', 'b5000000-0000-4000-8000-000000000001', '${U.beto}');
+    INSERT INTO work_site_fence_events (id, company_id, site_id, user_id, type, latitude, longitude, distance_m, occurred_at, acknowledged_by, acknowledged_at) VALUES
+      ('a6000000-0000-4000-8000-000000000001', '${A}', 'a5000000-0000-4000-8000-000000000001', '${U.bruno}', 'SAIDA', -23.502, -46.6, 40, ${ts("2026-09-05 10:00")}, NULL, NULL),
+      ('a6000000-0000-4000-8000-000000000002', '${A}', 'a5000000-0000-4000-8000-000000000001', '${U.bruno}', 'RETORNO', -23.5, -46.6, 0, ${ts("2026-09-05 10:20")}, NULL, NULL),
+      ('a6000000-0000-4000-8000-000000000003', '${A}', 'a5000000-0000-4000-8000-000000000002', '${U.carla}', 'SAIDA', -23.61, -46.7, 120, ${ts("2026-09-06 15:00")}, '${U.gil}', ${ts("2026-09-06 15:10")}),
+      ('b6000000-0000-4000-8000-000000000001', '${B}', 'b5000000-0000-4000-8000-000000000001', '${U.beto}', 'SAIDA', -22.91, -43.2, 500, ${ts("2026-09-05 10:00")}, NULL, NULL);
+    INSERT INTO fence_alert_deliveries (company_id, source, event_id, channel, recipient, status, error) VALUES
+      ('${A}', 'WORK_SITE', 'a6000000-0000-4000-8000-000000000001', 'EMAIL', 'gil@a.com', 'SENT', NULL),
+      ('${A}', 'WORK_SITE', 'a6000000-0000-4000-8000-000000000003', 'WHATSAPP', '5511999998888', 'FAILED', 'modelo não aprovado');
+
     INSERT INTO service_order_messages (company_id, service_order_id, kind, author_id, author_name, body) VALUES
       ('${A}', '${OS.os1}', 'MENSAGEM', '${U.gil}', 'Gil Gestor', 'Bom dia'),
       ('${A}', '${OS.os1}', 'SISTEMA', NULL, 'Sistema', 'Bruno aceitou a OS.');
