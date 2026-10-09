@@ -182,6 +182,25 @@ describe("números conferidos com os dados semeados", () => {
     expect(os.data[0]).toMatchObject({ exit_count: 1, alerted_exit_count: 1 });
   });
 
+  it("marcações: coordenada e local de ponto conferido na batida", async () => {
+    const r = await run({ dataset: "time_entries", measures: ["located_count", "outside_site_count"] });
+    expect(r.data[0]).toMatchObject({ located_count: 2, outside_site_count: 1 });
+    const by = await run({ dataset: "time_entries", measures: ["entry_count"], dimensions: ["site_check"] });
+    expect(by.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ site_check: "INSIDE", entry_count: 1 }),
+        expect.objectContaining({ site_check: "OUTSIDE", entry_count: 1 }),
+        expect.objectContaining({ site_check: "NO_CHECK", entry_count: 7 }),
+      ]),
+    );
+    const rows = await svc.records(
+      { dataset: "time_entries", filters: [{ dimension: "site_check", operator: "equals", values: ["OUTSIDE"] }] },
+      ctxA,
+      NOW,
+    );
+    expect(rows.data[0]).toMatchObject({ site: "Sede", site_distance: 35, coordinates: "-23.501200, -46.600000" });
+  });
+
   it("marcações feitas sem internet", async () => {
     const r = await run({ dataset: "time_entries", measures: ["entry_count", "offline_count", "offline_rate"] });
     expect(r.data[0]).toMatchObject({ entry_count: 9, offline_count: 1 });

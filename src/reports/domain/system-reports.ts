@@ -311,6 +311,21 @@ const REPORTS: Sys[] = [
     defaultPeriod: "this_month",
   },
   {
+    id: "sys-fora-do-local",
+    name: "Batidas fora do local de ponto",
+    description: "Marcações feitas fora do perímetro do local de ponto da pessoa, com a distância e as coordenadas.",
+    category: "Conformidade",
+    visualization: "table",
+    spec: {
+      dataset: "time_entries",
+      dimensions: ["timestamp", "person", "type", "site", "site_distance", "coordinates"],
+      measures: ["entry_count"],
+      filters: [{ dimension: "site_check", operator: "equals", values: ["OUTSIDE"] }],
+      order: [["timestamp", "desc"]],
+    },
+    defaultPeriod: "this_month",
+  },
+  {
     id: "sys-tentativas",
     name: "Tentativas de ponto recusadas",
     description: "Por que o ponto foi recusado (fora do perímetro, rosto não confere...).",

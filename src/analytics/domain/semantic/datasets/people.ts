@@ -216,7 +216,11 @@ export const timeEntriesDataset: Dataset = {
   icon: "Fingerprint",
   requires: [P.TIMECLOCK_READ],
   source: "public.time_entries t",
-  joins: { person: userJoin("u", "t.user_id"), adjuster: userJoin("adj", "t.adjusted_by") },
+  joins: {
+    person: userJoin("u", "t.user_id"),
+    adjuster: userJoin("adj", "t.adjusted_by"),
+    site: { sql: "LEFT JOIN public.work_sites ws ON ws.id = t.work_site_id" },
+  },
   defaultTimeDimension: "timestamp",
   dimensions: {
     person: person("Pessoa", "t.user_id", "u.name", "person"),
@@ -233,11 +237,51 @@ export const timeEntriesDataset: Dataset = {
     },
     timestamp: { title: "Data e hora", type: "time", sql: "t.timestamp" },
     received: { title: "Recebida em", type: "time", sql: "t.created_at" },
+    site: {
+      title: "Local de ponto conferido",
+      type: "string",
+      sql: "coalesce(ws.name, 'Sem local')",
+      key: "t.work_site_id",
+      joins: ["site"],
+    },
+    site_check: {
+      title: "Batida no local",
+      type: "string",
+      sql: "CASE WHEN t.work_site_distance_m IS NULL THEN 'NO_CHECK' WHEN t.work_site_distance_m = 0 THEN 'INSIDE' ELSE 'OUTSIDE' END",
+      labels: { INSIDE: "Dentro do local", OUTSIDE: "Fora do local", NO_CHECK: "Sem conferência" },
+    },
+    site_distance: {
+      title: "Fora do local (m)",
+      type: "number",
+      sql: "t.work_site_distance_m",
+      format: "meters",
+      groupable: false,
+    },
+    coordinates: {
+      title: "Coordenadas",
+      type: "string",
+      sql: "CASE WHEN t.latitude IS NULL THEN NULL ELSE round(t.latitude::numeric, 6) || ', ' || round(t.longitude::numeric, 6) END",
+      groupable: false,
+    },
     original: { title: "Horário original", type: "time", sql: "t.original_timestamp" },
   },
   measures: {
     entry_count: { kind: "count", title: "Marcações", format: "integer" },
     offline_count: { kind: "count", title: "Feitas sem internet", format: "integer", filter: "t.offline" },
+    located_count: { kind: "count", title: "Com coordenada", format: "integer", filter: "t.latitude IS NOT NULL" },
+    outside_site_count: {
+      kind: "count",
+      title: "Fora do local de ponto",
+      format: "integer",
+      filter: "t.work_site_distance_m > 0",
+    },
+    outside_site_rate: {
+      kind: "ratio",
+      title: "Taxa fora do local",
+      numerator: "outside_site_count",
+      denominator: "entry_count",
+      format: "percent",
+    },
     offline_rate: {
       kind: "ratio",
       title: "Taxa sem internet",
@@ -275,7 +319,7 @@ export const timeEntriesDataset: Dataset = {
     people_count: { kind: "countDistinct", title: "Pessoas", format: "integer", sql: "t.user_id" },
   },
   records: {
-    columns: ["timestamp", "person", "type", "source", "offline", "status", "original", "adjusted_by", "reason"],
+    columns: ["timestamp", "person", "type", "source", "offline", "site", "site_check", "site_distance", "coordinates", "status", "original", "adjusted_by", "reason"],
     order: "t.timestamp DESC",
   },
 };
