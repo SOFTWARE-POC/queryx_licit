@@ -298,6 +298,22 @@ const REPORTS: Sys[] = [
     defaultPeriod: "this_month",
   },
   {
+    id: "sys-inconsistencias",
+    name: "Marcações inconsistentes",
+    description:
+      "Marcações gravadas fora da regra (entrada repetida, saída sem entrada, fora de ordem…): o ponto não recusa marcação, o gestor trata.",
+    category: "Conformidade",
+    visualization: "table",
+    spec: {
+      dataset: "time_entries",
+      dimensions: ["timestamp", "person", "type", "inconsistency_reasons", "inconsistency_status", "status", "reason"],
+      measures: ["entry_count"],
+      filters: [{ dimension: "inconsistency_status", operator: "notEquals", values: ["NONE"] }],
+      order: [["timestamp", "desc"]],
+    },
+    defaultPeriod: "this_month",
+  },
+  {
     id: "sys-offline",
     name: "Batidas feitas sem internet",
     description: "Marcações feitas no app sem conexão: horário da batida, quando chegou ao servidor e a origem.",

@@ -193,6 +193,12 @@ export async function seed(db: Db): Promise<void> {
      WHERE user_id = '${U.bruno}' AND timestamp = ${ts("2026-09-01 08:00")};
     UPDATE time_entries SET latitude = -23.5012, longitude = -46.6, work_site_id = 'a5000000-0000-4000-8000-000000000001', work_site_distance_m = 35
      WHERE user_id = '${U.bruno}' AND timestamp = ${ts("2026-09-02 17:00")};
+    -- Inconsistências: a saída do Bruno de 02/09 ficou fora de ordem (tratada) e a
+    -- da Carla, saída sem entrada (ainda para conferir).
+    UPDATE time_entries SET inconsistencies = '{OUT_OF_ORDER}', inconsistency_resolved_at = ${ts("2026-09-03 09:00")}
+     WHERE user_id = '${U.bruno}' AND timestamp = ${ts("2026-09-02 17:00")};
+    UPDATE time_entries SET inconsistencies = '{CLOCK_OUT_WITHOUT_CLOCK_IN,TOO_CLOSE}'
+     WHERE user_id = '${U.carla}' AND type = 'CLOCK_OUT';
     -- Saída da Carla feita sem internet e enviada às 07:40.
     UPDATE time_entries SET offline = true, client_entry_id = 'p-carla-0001', created_at = ${ts("2026-09-02 07:40")}
      WHERE user_id = '${U.carla}' AND type = 'CLOCK_OUT';

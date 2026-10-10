@@ -182,6 +182,23 @@ describe("números conferidos com os dados semeados", () => {
     expect(os.data[0]).toMatchObject({ exit_count: 1, alerted_exit_count: 1 });
   });
 
+  it("marcações inconsistentes: situação, motivos e as que faltam conferir", async () => {
+    const r = await run({ dataset: "time_entries", measures: ["inconsistent_count", "open_inconsistency_count"] });
+    expect(r.data[0]).toMatchObject({ inconsistent_count: 2, open_inconsistency_count: 1 });
+    const rows = await svc.records(
+      {
+        dataset: "time_entries",
+        filters: [{ dimension: "inconsistency_status", operator: "equals", values: ["OPEN"] }],
+      },
+      ctxA,
+    );
+    expect(rows.data).toHaveLength(1);
+    expect(rows.data[0]).toMatchObject({
+      inconsistency_status: "OPEN",
+      inconsistency_reasons: "Saída sem entrada; Menos de 60 s da anterior",
+    });
+  });
+
   it("marcações: coordenada e local de ponto conferido na batida", async () => {
     const r = await run({ dataset: "time_entries", measures: ["located_count", "outside_site_count"] });
     expect(r.data[0]).toMatchObject({ located_count: 2, outside_site_count: 1 });

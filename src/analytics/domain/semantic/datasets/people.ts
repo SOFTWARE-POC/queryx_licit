@@ -347,9 +347,42 @@ export const timeEntriesDataset: Dataset = {
       groupable: false,
     },
     original: { title: "Horário original", type: "time", sql: "t.original_timestamp" },
+    // O ponto não recusa marcação (Portaria 671, art. 79): o que fugiu da regra
+    // é gravado com o motivo e o gestor trata (confirma, ajusta ou invalida).
+    inconsistency_status: {
+      title: "Inconsistência",
+      type: "string",
+      sql: "CASE WHEN cardinality(t.inconsistencies) = 0 THEN 'NONE' WHEN t.inconsistency_resolved_at IS NULL THEN 'OPEN' ELSE 'RESOLVED' END",
+      labels: { NONE: "Sem inconsistência", OPEN: "Para o gestor conferir", RESOLVED: "Tratada pelo gestor" },
+    },
+    inconsistency_reasons: {
+      title: "Motivo da inconsistência",
+      type: "string",
+      sql: `(SELECT string_agg(CASE r
+          WHEN 'REPEATED_CLOCK_IN' THEN 'Entrada com outra em aberto'
+          WHEN 'CLOCK_OUT_WITHOUT_CLOCK_IN' THEN 'Saída sem entrada'
+          WHEN 'TOO_CLOSE' THEN 'Menos de 60 s da anterior'
+          WHEN 'OUT_OF_ORDER' THEN 'Fora de ordem'
+          WHEN 'LATE_SYNC' THEN 'Enviada mais de 7 dias depois'
+          WHEN 'DEVICE_CLOCK_AHEAD' THEN 'Relógio do aparelho adiantado'
+          ELSE r END, '; ') FROM unnest(t.inconsistencies) AS r)`,
+      groupable: false,
+    },
   },
   measures: {
     entry_count: { kind: "count", title: "Marcações", format: "integer" },
+    inconsistent_count: {
+      kind: "count",
+      title: "Com inconsistência",
+      format: "integer",
+      filter: "cardinality(t.inconsistencies) > 0",
+    },
+    open_inconsistency_count: {
+      kind: "count",
+      title: "Inconsistências para conferir",
+      format: "integer",
+      filter: "cardinality(t.inconsistencies) > 0 AND t.inconsistency_resolved_at IS NULL",
+    },
     offline_count: { kind: "count", title: "Feitas sem internet", format: "integer", filter: "t.offline" },
     located_count: { kind: "count", title: "Com coordenada", format: "integer", filter: "t.latitude IS NOT NULL" },
     outside_site_count: {
@@ -402,7 +435,7 @@ export const timeEntriesDataset: Dataset = {
     people_count: { kind: "countDistinct", title: "Pessoas", format: "integer", sql: "t.user_id" },
   },
   records: {
-    columns: ["timestamp", "person", "type", "source", "offline", "site", "site_check", "site_distance", "coordinates", "status", "original", "adjusted_by", "reason"],
+    columns: ["timestamp", "person", "type", "source", "offline", "site", "site_check", "site_distance", "coordinates", "inconsistency_status", "inconsistency_reasons", "status", "original", "adjusted_by", "reason"],
     order: "t.timestamp DESC",
   },
 };
