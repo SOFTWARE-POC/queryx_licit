@@ -233,6 +233,10 @@ export async function seed(db: Db): Promise<void> {
     INSERT INTO access_logs (company_id, user_id, event, ip, created_at) VALUES
       ('${A}', '${U.gil}', 'LOGIN_OK', '10.0.0.1', ${ts("2026-09-02 06:50")}),
       ('${A}', '${U.gil}', 'LOGIN_FAIL', '10.0.0.1', ${ts("2026-09-02 06:49")});
+
+    -- Por último (OS atestada não aceita mais execução nem foto): a OS 1 foi
+    -- atestada; a 3, concluída, ainda espera o ateste.
+    UPDATE service_orders SET attested_at = ${ts("2026-09-05 09:00")} WHERE id = '${OS.os1}';
   `;
   for (const stmt of sql.split(/;\s*\n/).map((s) => s.replace(/^\s*--.*$/gm, "").trim()).filter(Boolean)) {
     await db.query(stmt);

@@ -61,6 +61,22 @@ describe("todo o catálogo roda no Postgres de verdade", () => {
 });
 
 describe("números conferidos com os dados semeados", () => {
+  it("OS: ateste do recebimento (atestadas e aguardando)", async () => {
+    const r = await run({
+      dataset: "service_orders",
+      measures: ["attested_count", "awaiting_attest_count"],
+      timeDimension: { dimension: "created", range: SEPT },
+    });
+    expect(r.data[0]).toMatchObject({ attested_count: 1, awaiting_attest_count: 1 });
+    const by = await run({ dataset: "service_orders", measures: ["order_count"], dimensions: ["attestation"] });
+    expect(by.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ attestation: "ATESTADA", order_count: 1 }),
+        expect.objectContaining({ attestation: "AGUARDANDO", order_count: 1 }),
+      ]),
+    );
+  });
+
   it("OS: situação, prazo e índices (SUM/SUM)", async () => {
     const r = await run({
       dataset: "service_orders",

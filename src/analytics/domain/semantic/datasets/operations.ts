@@ -69,9 +69,25 @@ export const serviceOrdersDataset: Dataset = {
     date_init: { title: "Início previsto", type: "time", sql: "t.date_init" },
     date_prev: { title: "Data limite", type: "time", sql: "t.date_prev" },
     completed: { title: "Conclusão", type: "time", sql: "t.completed_at" },
+    // Ateste do recebimento pelo atestante designado (IN Seges/MP 5/2017, art. 47).
+    attestation: {
+      title: "Ateste do recebimento",
+      type: "string",
+      sql: "CASE WHEN t.attested_at IS NOT NULL THEN 'ATESTADA' WHEN t.status = 'CONCLUIDA' THEN 'AGUARDANDO' ELSE 'NAO_CONCLUIDA' END",
+      labels: { ATESTADA: "Atestada", AGUARDANDO: "Concluída, aguardando ateste", NAO_CONCLUIDA: "Não concluída" },
+    },
+    attested: { title: "Ateste", type: "time", sql: "t.attested_at" },
   },
   measures: {
     order_count: { kind: "count", title: "OS", format: "integer" },
+    attested_count: { kind: "count", title: "Atestadas", format: "integer", filter: "t.attested_at IS NOT NULL" },
+    awaiting_attest_count: {
+      kind: "count",
+      title: "Aguardando ateste",
+      format: "integer",
+      description: "Concluídas que o atestante designado ainda não atestou.",
+      filter: "t.status = 'CONCLUIDA' AND t.attested_at IS NULL",
+    },
     pending_count: { kind: "count", title: "Pendentes", format: "integer", filter: "t.status = 'PENDENTE'" },
     in_progress_count: { kind: "count", title: "Em andamento", format: "integer", filter: "t.status = 'EM_ANDAMENTO'" },
     concluded_count: { kind: "count", title: "Concluídas", format: "integer", filter: "t.status = 'CONCLUIDA'" },
@@ -132,7 +148,7 @@ export const serviceOrdersDataset: Dataset = {
     assignee_count: { kind: "sum", title: "Pessoas enviadas", format: "integer", sql: "ax.n", joins: ["people"] },
   },
   records: {
-    columns: ["created", "type_service", "status", "deadline", "team", "date_prev", "completed"],
+    columns: ["created", "type_service", "status", "deadline", "team", "date_prev", "completed", "attestation"],
     order: "t.created_at DESC",
     link: { sql: "t.id", kind: "service-order" },
   },
