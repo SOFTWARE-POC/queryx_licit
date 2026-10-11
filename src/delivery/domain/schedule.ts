@@ -4,7 +4,7 @@ import { Author } from "../../reports/domain/report";
 
 export const FREQUENCIES = ["DAILY", "WEEKLY", "MONTHLY"] as const;
 export type Frequency = (typeof FREQUENCIES)[number];
-export const FORMATS = ["XLSX", "CSV"] as const;
+export const FORMATS = ["XLSX", "CSV", "PDF"] as const;
 export type ExportFormat = (typeof FORMATS)[number];
 export const MAX_RECIPIENTS = 50;
 
@@ -84,7 +84,7 @@ export function validateScheduleInput(body: unknown): { errors: string[]; input?
   if (!Number.isInteger(body.hour) || (body.hour as number) < 0 || (body.hour as number) > 23) errors.push("Hora inválida.");
   if (!isPeriodPreset(body.period)) errors.push("Período inválido.");
   const format = body.format ?? "XLSX";
-  if (!FORMATS.includes(format as never)) errors.push("Formato deve ser XLSX ou CSV.");
+  if (!FORMATS.includes(format as never)) errors.push("Formato deve ser XLSX, CSV ou PDF.");
   const recipients = body.recipients;
   if (
     !Array.isArray(recipients) ||

@@ -82,7 +82,7 @@ export function displayValue(value: unknown, ann: ColumnAnnotation | undefined, 
 }
 
 const UNIT: Partial<Record<string, string>> = { hours: " (h)", minutes: " (min)", days: " (dias)", meters: " (m)" };
-const headerOf = (ann: ColumnAnnotation | undefined, key: string) => `${ann?.title ?? key}${UNIT[ann?.format ?? ""] ?? ""}`;
+export const headerOf = (ann: ColumnAnnotation | undefined, key: string) => `${ann?.title ?? key}${UNIT[ann?.format ?? ""] ?? ""}`;
 
 /** CSV para Excel em português: `;`, vírgula decimal e BOM UTF-8. */
 export function toCsv(table: ExportTable, tz: string): Buffer {

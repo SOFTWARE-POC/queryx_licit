@@ -144,6 +144,19 @@ describe("relatórios da empresa", () => {
     expect(ws.getRow(4).values).toEqual([undefined, "Tipo de serviço", "OS", "Taxa de conclusão"]);
     expect(ws.getCell("C5").numFmt).toBe("0.0%");
   });
+
+  it("exporta PDF com período", async () => {
+    const res = await h
+      .http("ana")
+      .get(`/reports/${id}/export?format=pdf&from=2026-09-01&to=2026-09-30`)
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    expect(res.headers["content-type"]).toContain("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/renomeado.*\.pdf/);
+    expect((res.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
+    await h.http("ana").get(`/reports/${id}/export?format=doc`).expect(400);
+  });
 });
 
 describe("painéis", () => {
@@ -178,6 +191,19 @@ describe("painéis", () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(res.body as never);
     expect(wb.worksheets.map((w) => w.name)).toEqual(["OS por situação", "Frequência e jornada"]);
+  });
+
+  it("exporta o painel em PDF (um relatório por página); CSV não", async () => {
+    const res = await h
+      .http("ana")
+      .get(`/dashboards/${id}/export?format=pdf&from=2026-09-01&to=2026-09-30`)
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    expect(res.headers["content-type"]).toContain("application/pdf");
+    const pages = Number(/\/Type \/Pages\s*\/Count (\d+)/.exec((res.body as Buffer).toString("latin1"))?.[1]);
+    expect(pages).toBeGreaterThanOrEqual(2);
+    await h.http("ana").get(`/dashboards/${id}/export?format=csv`).expect(400);
   });
 });
 
@@ -218,6 +244,12 @@ describe("envios agendados", () => {
     expect(mail.subject).toContain("Ausências e abonos · Mês passado");
     expect(mail.attachments[0].filename).toMatch(/^ausencias-e-abonos-\d{4}-\d{2}-01-a-.*\.xlsx$/);
     expect(mail.html).toContain("https://painel.test/admin/relatorios");
+
+    // O mesmo envio em PDF.
+    await h.http("ana").put(`/schedules/${s.id}`, { ...base, format: "PDF" }).expect(200);
+    h.mailer.sent = [];
+    await h.http("ana").post(`/schedules/${s.id}/run`).expect(200);
+    expect(h.mailer.sent[0].attachments[0].filename).toMatch(/\.pdf$/);
 
     const runs = await h.http("ana").get(`/schedules/${s.id}/runs`).expect(200);
     expect(runs.body.data[0]).toMatchObject({ trigger: "MANUAL", status: "OK", recipientCount: 1 });

@@ -9,6 +9,7 @@ import { DB, Db } from "../database/db";
 import { fileSlug } from "../delivery/application/export";
 import { ExportFile, ExportService } from "../delivery/application/export.service";
 import { SchedulesService } from "../delivery/application/schedules.service";
+import { ExportFormat, FORMATS } from "../delivery/domain/schedule";
 import { Actor, ReportsService } from "../reports/application/reports.service";
 
 const actorOf = (p: Principal): Actor => ({ ...toContext(p), name: p.name });
@@ -25,10 +26,10 @@ function sendFile(res: Response, file: ExportFile): void {
   res.end(file.content);
 }
 
-function formatOf(raw: unknown): "XLSX" | "CSV" {
+function formatOf(raw: unknown): ExportFormat {
   const f = String(raw ?? "xlsx").toUpperCase();
-  if (f !== "XLSX" && f !== "CSV") throw new AppError("invalid", "Formato deve ser xlsx ou csv.");
-  return f;
+  if (!FORMATS.includes(f as ExportFormat)) throw new AppError("invalid", "Formato deve ser xlsx, csv ou pdf.");
+  return f as ExportFormat;
 }
 
 /** `from`/`to` da query string (os dois ou nenhum). */
@@ -204,14 +205,18 @@ export class DashboardsController {
     @Param("id") id: string,
     @Query("from") from: string | undefined,
     @Query("to") to: string | undefined,
+    @Query("format") format: string | undefined,
     @Res() res: Response,
   ) {
     const ctx = toContext(user);
+    // Painel: XLSX (uma aba por relatório) ou PDF (uma página por relatório).
+    const fmt = formatOf(format);
+    if (fmt === "CSV") throw new AppError("invalid", "Painel exporta em xlsx ou pdf.");
     const dashboard = await this.reports.getDashboard(ctx, id);
     const range = rangeOf(from, to) ?? resolvePreset(dashboard.defaultPeriod, this.timezone);
     const { tables } = await this.exporter.dashboardTables(dashboard, range, ctx);
     if (!tables.length) throw new AppError("forbidden", "Nenhum item deste painel está liberado para você.");
-    sendFile(res, await this.exporter.file(tables, "XLSX", `${fileSlug(dashboard.name)}-${range[0]}-a-${range[1]}`));
+    sendFile(res, await this.exporter.file(tables, fmt, `${fileSlug(dashboard.name)}-${range[0]}-a-${range[1]}`));
   }
 
   @Post()

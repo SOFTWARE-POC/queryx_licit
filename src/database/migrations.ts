@@ -102,6 +102,14 @@ const MIGRATIONS: Array<{ version: string; statements: (s: string) => string[] }
       `CREATE INDEX schedule_runs_schedule_idx ON ${s}.schedule_runs (schedule_id, started_at DESC)`,
     ],
   },
+  {
+    // Envio programado também em PDF.
+    version: "002_schedule_pdf",
+    statements: (s) => [
+      `ALTER TABLE ${s}.schedules DROP CONSTRAINT schedules_format_ck`,
+      `ALTER TABLE ${s}.schedules ADD CONSTRAINT schedules_format_ck CHECK (format IN ('XLSX', 'CSV', 'PDF'))`,
+    ],
+  },
 ];
 
 const LOCK_KEY = 72_510_003; // inteiro fixo deste serviço

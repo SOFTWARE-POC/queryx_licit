@@ -4,6 +4,7 @@ import { buildCatalog } from "../src/analytics/domain/semantic/registry";
 import { SecurityContext } from "../src/analytics/domain/types";
 import { validateQuerySpec } from "../src/analytics/domain/validation";
 import { toCsv } from "../src/delivery/application/export";
+import { toPdf } from "../src/delivery/application/export-pdf";
 import { nextRunAt } from "../src/delivery/domain/schedule";
 import { validateReportInput, withRange } from "../src/reports/domain/report";
 import { SYSTEM_DASHBOARDS, SYSTEM_REPORTS } from "../src/reports/domain/system-reports";
@@ -124,5 +125,27 @@ describe("CSV", () => {
       TZ,
     ).toString("utf8");
     expect(csv).toBe('﻿Situação;Taxa;Obs\r\nAtivo;12,5;"diz ""oi""; tchau"\r\n');
+  });
+});
+
+describe("PDF", () => {
+  const pagesOf = (pdf: Buffer) => Number(/\/Type \/Pages\s*\/Count (\d+)/.exec(pdf.toString("latin1"))?.[1]);
+
+  it("tabela longa quebra em páginas; muitas colunas vira paisagem", async () => {
+    const columns = ["nome", "c1", "c2", "c3", "c4", "c5"];
+    const data = Array.from({ length: 300 }, (_, i) => ({ nome: `Pessoa ${i}`, c1: i, c2: i * 2, c3: "x", c4: "y", c5: 1.5 }));
+    const pdf = await toPdf(
+      [{ title: "Longo", subtitle: "Setembro", columns, annotation: { c1: { type: "number", format: "integer" } } as never, data }],
+      "America/Sao_Paulo",
+    );
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pagesOf(pdf)).toBeGreaterThan(1);
+    // Paisagem: MediaBox A4 deitado (842 x 595).
+    expect(pdf.toString("latin1")).toMatch(/\/MediaBox \[0 0 841\.89 595\.28\]/);
+  });
+
+  it("sem dados ainda gera o PDF com o aviso", async () => {
+    const pdf = await toPdf([{ title: "Vazio", columns: ["a"], annotation: {}, data: [] }], "America/Sao_Paulo");
+    expect(pagesOf(pdf)).toBe(1);
   });
 });

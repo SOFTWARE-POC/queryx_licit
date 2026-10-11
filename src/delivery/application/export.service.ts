@@ -5,7 +5,9 @@ import { QueryResult, QuerySpec, SecurityContext } from "../../analytics/domain/
 import { ReportsService } from "../../reports/application/reports.service";
 import { DashboardDefinition } from "../../reports/domain/dashboard";
 import { ReportDefinition, withRange } from "../../reports/domain/report";
+import { ExportFormat } from "../domain/schedule";
 import { ExportTable, toCsv, toXlsx } from "./export";
+import { toPdf } from "./export-pdf";
 
 const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 export const rangeLabel = (range: [string, string] | null) =>
@@ -19,8 +21,9 @@ export interface ExportFile {
 
 export const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 export const CSV_TYPE = "text/csv; charset=utf-8";
+export const PDF_TYPE = "application/pdf";
 
-/** Monta tabelas de relatórios/painéis e os arquivos CSV/XLSX. */
+/** Monta tabelas de relatórios/painéis e os arquivos CSV/XLSX/PDF. */
 @Injectable()
 export class ExportService {
   constructor(
@@ -64,7 +67,11 @@ export class ExportService {
     return { tables, datasets: [...datasets] };
   }
 
-  async file(tables: ExportTable[], format: "XLSX" | "CSV", baseName: string): Promise<ExportFile> {
+  async file(tables: ExportTable[], format: ExportFormat, baseName: string): Promise<ExportFile> {
+    if (format === "PDF") {
+      // O PDF leva todas as tabelas (painel: um relatório por página).
+      return { filename: `${baseName}.pdf`, contentType: PDF_TYPE, content: await toPdf(tables, this.timezone) };
+    }
     if (format === "CSV") {
       // CSV é uma tabela só: o painel exporta a primeira (o XLSX leva todas).
       return { filename: `${baseName}.csv`, contentType: CSV_TYPE, content: toCsv(tables[0], this.timezone) };
