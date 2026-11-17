@@ -72,7 +72,7 @@ export class AnalyticsService {
     @Inject(TIMEZONE) private readonly timezone: string,
   ) {}
 
-  datasets(ctx: Pick<SecurityContext, "permissions">): Dataset[] {
+  datasets(ctx: Pick<SecurityContext, "permissions" | "contractIds">): Dataset[] {
     return this.catalog.list().filter((d) => canUseDataset(d, ctx));
   }
 
@@ -81,7 +81,7 @@ export class AnalyticsService {
   }
 
   /** Catálogo para o construtor: só os temas que o usuário pode ver. */
-  catalogView(ctx: Pick<SecurityContext, "permissions">): CatalogView[] {
+  catalogView(ctx: Pick<SecurityContext, "permissions" | "contractIds">): CatalogView[] {
     return this.datasets(ctx).map((d) => ({
       name: d.name,
       title: d.title,

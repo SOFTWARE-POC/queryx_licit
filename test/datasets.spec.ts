@@ -349,3 +349,60 @@ describe("isolamento e permissões", () => {
     expect(svc.catalogView(noAudit).map((d) => d.name)).toEqual(["service_orders", "assignments", "executions", "fence_events"]);
   });
 });
+
+describe("acesso por contrato (fiscal de um contrato)", () => {
+  let contractA1: string;
+  let licitA: string;
+  let orderId: string;
+
+  beforeAll(async () => {
+    const { rows } = await t.db.query<{ id: string; licit_id: string }>(
+      "SELECT id, licit_id FROM contracts WHERE company_id = $1 ORDER BY num_contract LIMIT 1",
+      [A],
+    );
+    contractA1 = rows[0].id;
+    licitA = rows[0].licit_id;
+    // Só uma OS (ainda não atestada) é deste contrato; as outras do seed não têm contrato.
+    const os = await t.db.query<{ id: string }>(
+      "SELECT id FROM service_orders WHERE company_id = $1 AND attested_at IS NULL ORDER BY id LIMIT 1",
+      [A],
+    );
+    orderId = os.rows[0].id;
+    await t.db.query("UPDATE service_orders SET licit_id = $2, contract_id = $3 WHERE id = $1", [orderId, licitA, contractA1]);
+  });
+
+  afterAll(async () => {
+    await t.db.query("UPDATE service_orders SET licit_id = NULL, contract_id = NULL WHERE id = $1", [orderId]);
+  });
+
+  const scoped = (contractIds: string[]): SecurityContext => ({ ...ctxA, contractIds });
+
+  it("OS e o que é delas: só as dos contratos da pessoa", async () => {
+    const all = await run({ dataset: "service_orders", measures: ["order_count"] });
+    const mine = await run({ dataset: "service_orders", measures: ["order_count"] }, scoped([contractA1]));
+    expect(Number(all.data[0].order_count)).toBeGreaterThan(1);
+    expect(mine.data[0]).toMatchObject({ order_count: 1 });
+    const none = await run(
+      { dataset: "executions", measures: Object.keys(catalog.get("executions")!.measures).slice(0, 1) },
+      scoped(["cccccccc-0000-4000-8000-000000000001"]),
+    );
+    expect(Object.values(none.data[0] ?? {}).every((v) => v === 0 || v === null)).toBe(true);
+  });
+
+  it("contratos e licitações: só os liberados", async () => {
+    const c = await run({ dataset: "contracts", measures: ["contract_count"] }, scoped([contractA1]));
+    expect(c.data[0]).toMatchObject({ contract_count: 1 });
+    const l = await run({ dataset: "licits", measures: ["licit_count"] }, scoped([contractA1]));
+    expect(l.data[0]).toMatchObject({ licit_count: 1 });
+  });
+
+  it("temas sem ligação com contrato (ponto, abonos, pessoas, auditoria) ficam fechados", async () => {
+    const ctx = scoped([contractA1]);
+    await expect(run({ dataset: "time_entries", measures: ["entry_count"] }, ctx)).rejects.toMatchObject({ kind: "forbidden" });
+    const names = svc.datasets(ctx).map((d) => d.name);
+    expect(names).toEqual(expect.arrayContaining(["service_orders", "contracts", "licits"]));
+    expect(names).not.toEqual(expect.arrayContaining(["time_entries"]));
+    expect(names).not.toContain("absences");
+    expect(names).not.toContain("audit");
+  });
+});

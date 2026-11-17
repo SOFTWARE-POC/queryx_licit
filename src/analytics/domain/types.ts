@@ -105,6 +105,12 @@ export interface Dataset {
   joins?: Record<string, { sql: string; requires?: string[] }>;
   /** Predicado fixo do dataset (SQL confiável). */
   where?: string;
+  /**
+   * Como o tema se liga a contrato, para quem tem acesso por contrato: a coluna
+   * do contrato ou da licitação (SQL confiável). Sem isto, o tema fica fechado
+   * para essas pessoas.
+   */
+  contractScope?: { contract: string } | { licit: string };
   defaultTimeDimension?: string;
   /** O dataset precisa de período (ex.: dias de escala gerados). Sem ele, últimos 30 dias. */
   needsPeriod?: boolean;
@@ -173,6 +179,11 @@ export interface SecurityContext {
   tenantId: string;
   userId: string;
   permissions: readonly string[];
+  /**
+   * Acesso por contrato (ex.: fiscal da prefeitura): só dados destes contratos.
+   * null/ausente = sem restrição. Com lista, temas sem `contractScope` ficam fechados.
+   */
+  contractIds?: readonly string[] | null;
 }
 
 export interface ColumnAnnotation {

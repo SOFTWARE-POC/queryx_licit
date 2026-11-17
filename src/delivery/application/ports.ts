@@ -35,6 +35,8 @@ export interface DirectoryPerson {
   email: string;
   active: boolean;
   permissions: string[];
+  /** Acesso por contrato (null = todos). */
+  contractIds: string[] | null;
 }
 
 export interface Directory {

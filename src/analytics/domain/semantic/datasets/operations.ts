@@ -28,6 +28,7 @@ export const serviceOrdersDataset: Dataset = {
   grain: "uma ordem de serviço (situação atual)",
   icon: "Wrench",
   requires: [P.SERVICE_ORDER_READ],
+  contractScope: { contract: "t.contract_id" },
   source: "public.service_orders t",
   joins: {
     team: { sql: "LEFT JOIN public.teams tm ON tm.id = t.team_id" },
@@ -163,6 +164,7 @@ export const assignmentsDataset: Dataset = {
   grain: "uma OS enviada a uma pessoa",
   icon: "Send",
   requires: [P.SERVICE_ORDER_READ],
+  contractScope: { contract: "o.contract_id" },
   source: `public.service_order_assignees t
   JOIN public.service_orders o ON o.id = t.service_order_id AND o.company_id = t.company_id`,
   joins: {
@@ -238,6 +240,7 @@ export const executionsDataset: Dataset = {
   grain: "uma execução enviada para avaliação",
   icon: "ClipboardCheck",
   requires: [P.SERVICE_ORDER_READ],
+  contractScope: { contract: "o.contract_id" },
   source: `public.service_execs t
   JOIN public.service_orders o ON o.id = t.service_order_id AND o.company_id = t.company_id`,
   joins: {
@@ -345,6 +348,7 @@ export const fenceEventsDataset: Dataset = {
   grain: "uma saída ou retorno da cerca",
   icon: "MapPinOff",
   requires: [P.SERVICE_ORDER_READ],
+  contractScope: { contract: "o.contract_id" },
   source: `public.service_order_fence_events t
   JOIN public.service_orders o ON o.id = t.service_order_id AND o.company_id = t.company_id`,
   joins: {
@@ -434,6 +438,7 @@ export const popUsageDataset: Dataset = {
   grain: "um POP vinculado a uma OS",
   icon: "BookOpen",
   requires: [P.SERVICE_ORDER_READ, P.POPS_READ],
+  contractScope: { contract: "o.contract_id" },
   source: `public.service_order_pops t
   JOIN public.pops p ON p.id = t.pop_id AND p.company_id = t.company_id
   JOIN public.service_orders o ON o.id = t.service_order_id AND o.company_id = t.company_id`,

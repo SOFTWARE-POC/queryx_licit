@@ -68,8 +68,19 @@ export function getDataset(catalog: Catalog, name: string): Dataset {
 }
 
 /** O usuário (ou o dono do agendamento) pode consultar este dataset? */
-export function canUseDataset(ds: Dataset, ctx: Pick<SecurityContext, "permissions">): boolean {
+export function canUseDataset(ds: Dataset, ctx: Pick<SecurityContext, "permissions" | "contractIds">): boolean {
+  if (ctx.contractIds && !ds.contractScope) return false;
   return ds.requires.every((p) => ctx.permissions.includes(p));
+}
+
+/** Acesso por contrato: só linhas dos contratos da pessoa (lista como parâmetro). */
+function contractScopeClause(ds: Dataset, ctx: Pick<SecurityContext, "contractIds">, params: Params): string | null {
+  if (!ctx.contractIds) return null;
+  if (!ds.contractScope) throw new QueryError("forbidden", `Sem permissão para o tema '${ds.title}'.`);
+  const ids = `${params.add([...ctx.contractIds])}::uuid[]`;
+  return "contract" in ds.contractScope
+    ? `${ds.contractScope.contract} = ANY(${ids})`
+    : `${ds.contractScope.licit} IN (SELECT sc.licit_id FROM public.contracts sc WHERE sc.company_id = ${TENANT} AND sc.id = ANY(${ids}))`;
 }
 
 export function assertDatasetAccess(ds: Dataset, ctx: SecurityContext): void {
@@ -269,9 +280,12 @@ function buildWhere(
   ds: Dataset,
   params: Params,
   range: [string, string] | null,
+  ctx: Pick<SecurityContext, "contractIds">,
 ): WherePlan {
   // Primeiro predicado: SEMPRE a empresa da sessão.
   const clauses = [`t.company_id = ${TENANT}`];
+  const scope = contractScopeClause(ds, ctx, params);
+  if (scope) clauses.push(`(${scope})`);
   const joins: string[] = [];
   if (ds.where) clauses.push(`(${ds.where})`);
 
@@ -356,7 +370,7 @@ export function compileQuery(spec: QuerySpec, ctx: SecurityContext, catalog: Cat
   const params = new Params(ctx.tenantId, options.timezone);
   const range = effectiveRange(spec, ds, options.timezone, options.now);
   const from = sourceSql(ds, params, range);
-  const where = buildWhere(spec, ds, params, range);
+  const where = buildWhere(spec, ds, params, range, ctx);
   const joins = new Set(where.joins);
 
   const inner: string[] = [];
@@ -494,7 +508,7 @@ export function compileRecords(
   const params = new Params(ctx.tenantId, options.timezone);
   const range = effectiveRange(spec, ds, options.timezone, options.now);
   const from = sourceSql(ds, params, range);
-  const where = buildWhere(spec, ds, params, range);
+  const where = buildWhere(spec, ds, params, range, ctx);
   const joins = new Set(where.joins);
 
   const select: string[] = [];
@@ -560,6 +574,8 @@ export function compileValues(
   // Sem período: a lista mostra o que existe no histórico (com teto).
   const from = sourceSql(ds, params, ds.needsPeriod ? resolvePreset("last_12_months", options.timezone, options.now) : null);
   const clauses = [`t.company_id = ${TENANT}`];
+  const scope = contractScopeClause(ds, ctx, params);
+  if (scope) clauses.push(`(${scope})`);
   if (ds.where) clauses.push(`(${ds.where})`);
   clauses.push(`(${dim.sql}) IS NOT NULL`);
   if (spec.search?.trim()) {

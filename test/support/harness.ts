@@ -21,16 +21,17 @@ export class CaptureMailer implements Mailer {
 
 /** Tokens de teste → usuários (o que a API principal devolveria em /auth/me). */
 export const TOKENS: Record<string, Principal> = {
-  ana: { userId: U.ana, name: "Ana Admin", companyId: A, permissions: PERMISSIONS },
+  ana: { userId: U.ana, name: "Ana Admin", companyId: A, permissions: PERMISSIONS, contractIds: null },
   // Gestor: vê relatórios de OS/ponto/abonos, mas não gerencia nem vê auditoria.
   gil: {
     userId: U.gil,
     name: "Gil Gestor",
     companyId: A,
     permissions: ["report:read", "service-order:read", "timeclock:read"],
+    contractIds: null,
   },
-  bruno: { userId: U.bruno, name: "Bruno Campo", companyId: A, permissions: [] },
-  beto: { userId: U.beto, name: "Beto da B", companyId: B, permissions: PERMISSIONS },
+  bruno: { userId: U.bruno, name: "Bruno Campo", companyId: A, permissions: [], contractIds: null },
+  beto: { userId: U.beto, name: "Beto da B", companyId: B, permissions: PERMISSIONS, contractIds: null },
 };
 
 export interface Harness {

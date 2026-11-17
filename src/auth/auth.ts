@@ -20,12 +20,15 @@ export interface Principal {
   name: string;
   companyId: string;
   permissions: string[];
+  /** Acesso por contrato (null = todos). */
+  contractIds: string[] | null;
 }
 
 export const toContext = (p: Principal): SecurityContext => ({
   tenantId: p.companyId,
   userId: p.userId,
   permissions: p.permissions,
+  contractIds: p.contractIds,
 });
 
 export interface IdentityProvider {
@@ -77,6 +80,7 @@ export class MainApiIdentityProvider implements IdentityProvider {
       name: String(u.name ?? ""),
       companyId: u.company.id,
       permissions: Array.isArray(u.permissions) ? u.permissions.map(String) : [],
+      contractIds: Array.isArray(u.contractScope) ? u.contractScope.filter(isUuid).map(String) : null,
     });
   }
 
