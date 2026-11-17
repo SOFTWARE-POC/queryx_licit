@@ -21,6 +21,17 @@ import {
 export const PANEL_URL = Symbol("PANEL_URL");
 
 /** Relatório/painel excluído: os agendamentos dele saem junto. */
+/**
+ * Acesso por contrato: o destinatário só recebe o que vê. Quem só vê alguns
+ * contratos recebe apenas agendamentos de quem vê no máximo esses mesmos.
+ */
+function seesAllOf(recipient: readonly string[] | null, owner: readonly string[] | null): boolean {
+  if (recipient === null) return true;
+  if (owner === null) return false;
+  const mine = new Set(recipient);
+  return owner.every((id) => mine.has(id));
+}
+
 @Injectable()
 export class ScheduleCleanup implements TargetCleanup {
   constructor(@Inject(SCHEDULE_REPOSITORY) private readonly repo: ScheduleRepository) {}
@@ -182,7 +193,7 @@ export class SchedulesService {
     if (!owner?.active || !owner.permissions.includes(P_READ)) {
       return skip("Quem criou o agendamento não tem mais acesso a relatórios. Edite-o para assumir o envio.");
     }
-    const ctx = { tenantId: s.companyId, userId: owner.id, permissions: owner.permissions };
+    const ctx = { tenantId: s.companyId, userId: owner.id, permissions: owner.permissions, contractIds: owner.contractIds };
     const range = resolvePreset(s.period, this.timezone, now);
 
     let title: string;
@@ -206,7 +217,11 @@ export class SchedulesService {
 
     const requires = new Set(datasets.flatMap((d) => this.analytics.dataset(d)?.requires ?? []));
     const allowed = (p: DirectoryPerson) =>
-      p.active && Boolean(p.email) && p.permissions.includes(P_READ) && [...requires].every((r) => p.permissions.includes(r));
+      p.active &&
+      Boolean(p.email) &&
+      p.permissions.includes(P_READ) &&
+      [...requires].every((r) => p.permissions.includes(r)) &&
+      seesAllOf(p.contractIds, owner.contractIds);
     const people = (await this.directory.people(s.companyId)).filter((p) => s.recipients.includes(p.id) && allowed(p));
     if (!people.length) return skip("Nenhum destinatário pode ver este conteúdo hoje.", range);
 

@@ -113,6 +113,7 @@ export const contractsDataset: Dataset = {
   grain: "um contrato",
   icon: "FileText",
   requires: [P.CONTRACT_READ],
+  contractScope: { contract: "t.id" },
   source: `public.contracts t
   JOIN public.licits l ON l.id = t.licit_id AND l.company_id = t.company_id`,
   defaultTimeDimension: "start",
@@ -174,6 +175,7 @@ export const licitsDataset: Dataset = {
   grain: "uma licitação",
   icon: "Scroll",
   requires: [P.LICIT_READ],
+  contractScope: { licit: "t.id" },
   source: "public.licits t",
   joins: {
     contracts: {

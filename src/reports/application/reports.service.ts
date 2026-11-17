@@ -30,7 +30,7 @@ export class ReportsService {
     @Inject(TARGET_CLEANUP) private readonly cleanup: TargetCleanup,
   ) {}
 
-  private readable(r: ReportDefinition, ctx: Pick<SecurityContext, "permissions">): boolean {
+  private readable(r: ReportDefinition, ctx: Pick<SecurityContext, "permissions" | "contractIds">): boolean {
     const ds = this.analytics.dataset(r.spec.dataset);
     return Boolean(ds && canUseDataset(ds, ctx));
   }

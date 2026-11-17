@@ -198,7 +198,9 @@ export class PgDirectory implements Directory {
                 UNION
                 SELECT p.key FROM public.user_permission_overrides o
                   JOIN public.permissions p ON p.id = o.permission_id
-                 WHERE o.user_id = u.id AND o.granted) x), '{}') AS permissions
+                 WHERE o.user_id = u.id AND o.granted) x), '{}') AS permissions,
+              (SELECT array_agg(a.contract_id::text ORDER BY a.contract_id)
+                 FROM public.user_contract_access a WHERE a.user_id = u.id) AS contract_ids
          FROM public.users u
         WHERE u.company_id = $1 ${userId ? "AND u.id = $2" : ""}`,
       userId ? [companyId, userId] : [companyId],
@@ -209,6 +211,12 @@ export class PgDirectory implements Directory {
       email: String(r.email ?? ""),
       active: Boolean(r.active),
       permissions: Array.isArray(r.permissions) ? r.permissions.map(String) : parsePgArray(r.permissions),
+      contractIds:
+        r.contract_ids == null
+          ? null
+          : Array.isArray(r.contract_ids)
+            ? r.contract_ids.map(String)
+            : parsePgArray(r.contract_ids),
     }));
   }
 
